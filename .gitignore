@@ -1,0 +1,11 @@
+# Ignore the workspace settings file
+/.vscode
+
+# Ignore the Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Ignore the Pycache
+__pycache__/
+
+# Ignore project directories
+arduino_projects/
