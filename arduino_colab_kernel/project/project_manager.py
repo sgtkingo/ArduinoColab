@@ -5,10 +5,11 @@ from typing import List, Dict
 import os
 import json
 
-from code_manager import ArduinoCodeManager
-from ino_generator import InoGenerator
+from arduino_colab_kernel.board.board_manager import board_manager  # globální instance BoardManager
+from arduino_colab_kernel.code.code_manager import code_manager  # globální instance ArduinoCodeManager
+from arduino_colab_kernel.code.ino_generator import InoGenerator
 
-DEFAULT_PROJECTS_DIR = "./arduino_projects"
+DEFAULT_PROJECTS_DIR = "./projects"
 
 class ArduinoProjectManager:
     def __init__(self):
@@ -17,8 +18,6 @@ class ArduinoProjectManager:
         self.project_dir_rel = ""
         self.project_dir_abs = ""
         self.ino_generator:InoGenerator = InoGenerator(prepare_dirs=False)
-        # Inicializace správce kódu
-        self.code_manager = ArduinoCodeManager()
         
     def project_exists(self, project_name: str, project_dir: str = DEFAULT_PROJECTS_DIR) -> bool:
         """
@@ -39,7 +38,7 @@ class ArduinoProjectManager:
         self.set_project_dir(project_dir)
         
         self.ino_generator = InoGenerator(self.project_name, self.project_dir_abs)
-        self.code_manager.clear()  # Vymaže kód v paměti
+        code_manager.clear()  # Vymaže kód v paměti
         self.save()  # Vytvoří prázdný .ino soubor
     
     def load_project(self, project_name: str, project_dir: str = DEFAULT_PROJECTS_DIR, from_json=True):
@@ -57,13 +56,13 @@ class ArduinoProjectManager:
                 raise FileNotFoundError(f"Projekt {self.project_name} neobsahuje žádný JSON soubor.")
             with open(json_file, "r", encoding="utf-8") as f:
                 json_code = json.load(f)
-                self.code_manager.import_from_json(json_code)
+                code_manager.import_from_json(json_code)
         else:
             ino_file = self.ino_generator.get_path()
             if not os.path.exists(ino_file):
                 raise FileNotFoundError(f"Projekt {self.project_name} neobsahuje žádný .ino soubor.")
             code = self.ino_generator.load_code()
-            self.code_manager.import_from_code(code)
+            code_manager.import_from_code(code)
         
     def get_project(self) -> tuple:
         """
@@ -73,7 +72,7 @@ class ArduinoProjectManager:
     
     def delete_project(self):
         """Vymaže celý projekt."""
-        self.code_manager.clear()
+        code_manager.clear()
         sketch_dir = self.get_project_dir(as_abs=False)
         if os.path.exists(sketch_dir):
             # Recurse delete of the sketech directory and all its contents
@@ -84,17 +83,36 @@ class ArduinoProjectManager:
                     os.rmdir(os.path.join(root, name))
             os.rmdir(sketch_dir)
     
+    def clear(self):
+        """Vymaže aktuální projekt a kód v paměti."""
+        code_manager.clear()
+    
+    def export(self) -> dict:
+        """
+        Exportuje aktuální nastavení projektu jako slovník.
+        Vrací slovník s názvem projektu a cestou k adresáři.
+        """
+        return {
+            "project_name": self.project_name,
+            "project_dir": self.get_project_dir(as_abs=True),
+            "ino_file": self.ino_generator.get_path(),
+            "board": board_manager.export(),
+            "code": code_manager.export_as_json()
+        }
+    
     def save(self) -> str:
         """
         Uloží aktuální kód do .ino souboru v cílovém adresáři.
         """
-        code = self.code_manager.export_as_code()
+        code = code_manager.export_as_code()
         self.ino_generator.write_code(code)
         
-        json_code = self.code_manager.export_as_json()
+        # Export project
+        project_json = self.export()
+        
         json_file = os.path.join(self.project_dir_abs, f"{self.project_name}.json")
         with open(json_file, "w", encoding="utf-8") as f:
-            json.dump(json_code, f, indent=4, ensure_ascii=False)
+            json.dump(project_json, f, indent=4, ensure_ascii=False)
         
         return self.get_project_dir(as_abs=True)       
     
@@ -114,3 +132,6 @@ class ArduinoProjectManager:
         as_abs: pokud True, vrací absolutní cestu, jinak relativní.
         """
         return self.project_dir_abs if as_abs else self.project_dir_rel
+    
+# Singleton for magics
+project_manager = ArduinoProjectManager()

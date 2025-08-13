@@ -8,4 +8,13 @@
 __pycache__/
 
 # Ignore project directories
-arduino_projects/
+projects/
+
+# Ignore __pycache__ directories
+**/__pycache__/
+
+# Ignore Python bytecode files
+*.pyc
+
+# Ignore egg info directories
+*.egg-info/

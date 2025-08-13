@@ -141,4 +141,6 @@ class ArduinoCodeManager:
             raise ValueError("Neplatné sekce v JSON datech.")
         self.sections = json_data
         
-        
+    
+# Singleton instance
+code_manager = ArduinoCodeManager()
