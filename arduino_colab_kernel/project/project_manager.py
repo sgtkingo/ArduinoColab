@@ -38,8 +38,9 @@ class ArduinoProjectManager:
         self.set_project_dir(project_dir)
         
         self.ino_generator = InoGenerator(self.project_name, self.project_dir_abs)
-        code_manager.clear()  # Vymaže kód v paměti
-        self.save()  # Vytvoří prázdný .ino soubor
+        board_manager.default() # Vyber defaultní desku
+        code_manager.reinit()  # Re-inicializuje code manager
+        self.save()  # Ulož projekt
     
     def load_project(self, project_name: str, project_dir: str = DEFAULT_PROJECTS_DIR, from_json=True):
         """
@@ -53,15 +54,11 @@ class ArduinoProjectManager:
         if from_json:
             json_file = os.path.join(self.project_dir_abs, f"{self.project_name}.json")
             if not os.path.exists(json_file):
-                raise FileNotFoundError(f"Projekt {self.project_name} neobsahuje žádný JSON soubor.")
+                raise FileNotFoundError(f"Projekt {self.project_name} neobsahuje žádný JSON projektový soubor.")
             with open(json_file, "r", encoding="utf-8") as f:
-                json_code = json.load(f)
-                code_manager.import_from_json(json_code)
+                raise NotImplementedError("Load project from JSON is not supported yet...")
         else:
-            ino_file = self.ino_generator.get_path()
-            if not os.path.exists(ino_file):
-                raise FileNotFoundError(f"Projekt {self.project_name} neobsahuje žádný .ino soubor.")
-            code = self.ino_generator.load_code()
+            code = self.ino_generator.load()
             code_manager.import_from_code(code)
         
     def get_project(self) -> tuple:
@@ -86,6 +83,10 @@ class ArduinoProjectManager:
     def clear(self):
         """Vymaže aktuální projekt a kód v paměti."""
         code_manager.clear()
+        
+    def show(self) -> str:
+        """Vrátí aktuální kody projektu"""
+        return code_manager.export_as_code()
     
     def export(self) -> dict:
         """
@@ -105,7 +106,7 @@ class ArduinoProjectManager:
         Uloží aktuální kód do .ino souboru v cílovém adresáři.
         """
         code = code_manager.export_as_code()
-        self.ino_generator.write_code(code)
+        self.ino_generator.export(code)
         
         # Export project
         project_json = self.export()

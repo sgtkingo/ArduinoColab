@@ -40,8 +40,8 @@ class ProjectMagics(Magics):
                 display(Markdown("`Smazání projektu zrušeno...`"))
         elif cmd == "show":
             project_name = project_manager.project_name if project_manager.project_name else "Není nastaven žádný projekt"
-            project = project_manager.export()
-            display(Markdown(f"Project: **{project_name}**\n ```\n" + json.dumps(project, indent=4) + "\n```"))
+            code = project_manager.show()
+            display(Markdown(f"Project: **{project_name}**\n ```\n" + code + "\n```"))
         elif cmd == "export":
             file = project_manager.save()
             display(Markdown("```\n Project exported and saved as:" + file + "\n```"))

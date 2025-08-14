@@ -18,3 +18,11 @@ projects/
 
 # Ignore egg info directories
 *.egg-info/
+
+#Ignore documents
+*.pdf
+*.docx
+*.txt
+*.gsheet
+
+

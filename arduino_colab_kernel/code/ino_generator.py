@@ -12,7 +12,7 @@ class InoGenerator:
         if prepare_dirs:
             os.makedirs(self.output_dir, exist_ok=True)
 
-    def write_code(self, code: str):
+    def export(self, code: str):
         """
         Zapíše kód do .ino souboru v cílovém adresáři.
         code: kompletní Arduino kód jako text
@@ -20,17 +20,18 @@ class InoGenerator:
         with open(self.ino_file, "w", encoding="utf-8") as f:
             f.write(code)
             
-    def load_code(self) -> str:
+    def load(self) -> str:
         """
         Načte kód z .ino souboru.
         Vrací obsah souboru jako text.
         """
-        if not os.path.exists(self.ino_file):
-            raise FileNotFoundError(f"Soubor {self.ino_file} neexistuje.")
+        ino_file = self.get_path()
+        if not os.path.exists(ino_file):
+            raise FileNotFoundError(f"Nenalezen žádný .ino soubor s cestou: {ino_file}.")
         
-        with open(self.ino_file, "r", encoding="utf-8") as f:
+        with open(ino_file, "r", encoding="utf-8") as f:
             return f.read()
 
     def get_path(self) -> str:
         """Vrací cestu ke generovanému .ino souboru."""
-        return self.ino_file
+        return  os.path.abspath(self.ino_file)

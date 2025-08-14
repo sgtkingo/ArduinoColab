@@ -32,6 +32,8 @@ class SerialPort:
         autostrip: bool = True,
     ):
         # Konfigurace portu
+        if not port:
+            port = SerialPort.suggest_port()
         self.port = port                  # např. "COM5" nebo "/dev/ttyUSB0"
         self.baudrate = baudrate
         self.timeout = timeout

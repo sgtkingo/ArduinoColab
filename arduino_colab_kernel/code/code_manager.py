@@ -15,6 +15,9 @@ LOOP_SECTION_SEPARATOR = "//**Loop**\n"
 
 class ArduinoCodeManager:
     def __init__(self):
+        self.reinit()
+    
+    def reinit(self):
         # Inicializace slovníku pro sekce kódu
         self.sections: Dict[str, Dict[str, str]] = {
             "globals": {},
