@@ -156,10 +156,13 @@ class BoardManager:
             "name": b.name,
             "fqbn": b.fqbn,
             "port": b.port,
-            "baudrate": b.serial.baudrate,
-            "timeout": b.serial.timeout,
-            "encoding": b.serial.encoding,
-            "autostrip": b.serial.autostrip
+            "serial":
+                    {
+                        "baudrate": b.serial.baudrate,
+                        "timeout": b.serial.timeout,
+                        "encoding": b.serial.encoding,
+                        "autostrip": b.serial.autostrip  
+                    }
         } 
 
 # Singleton for magics

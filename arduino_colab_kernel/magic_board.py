@@ -170,11 +170,10 @@ class BoardMagic(Magics):
                 return
 
             if cmd == "compile":
-                if not rest:
-                    display(Markdown("**Použití:** `%board compile [--log-file path]`"))
-                    return
-                # extrahuj --log-file, zbytek je sketch
-                rest, log_file = _parse_logfile(rest)
+                log_file = os.path.join(project_manager.get_logs_dir(as_abs=False),"compile.log")
+                if rest:
+                    rest, log_file = _parse_logfile(rest)
+                    
                 sketch_file = project_manager.save()
                 ok = board_manager.compile(sketch_file, log_file=log_file)
                 if ok:
@@ -185,10 +184,10 @@ class BoardMagic(Magics):
                 return
 
             if cmd == "upload":
-                if not rest:
-                    display(Markdown("**Použití:** `%board upload [--log-file path]`"))
-                    return
-                rest, log_file = _parse_logfile(rest)
+                log_file = os.path.join(project_manager.get_logs_dir(as_abs=False),"upload.log")
+                if rest:
+                    rest, log_file = _parse_logfile(rest)
+                    
                 sketch_file = project_manager.save()
                 ok = board_manager.upload(sketch_file, log_file=log_file)
                 if ok:

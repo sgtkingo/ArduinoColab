@@ -13,16 +13,12 @@ class Board:
     """Reprezentace HW desky + sériová komunikace přes kompozici SerialPortu."""
 
     def __init__(self, name: str, fqbn: str, port: str|None = None):
-        # Identita desky
-        self.name = name      # např. "uno", "nano"
-        self.fqbn = fqbn      # např. "arduino:avr:uno"
         if not port:
             port = SerialPort.suggest_port()  # Automaticky navrhne port, pokud není zadán
-        self.port = port      # např. "COM5" nebo "/dev/ttyUSB0"
 
         # Kompozice – sériová linka je vyčleněná do samostatné třídy
         self.serial = SerialPort()
-        self.serial.configure(port=port, **DEFAULT_SERIAL_CONFIG)  #default konfigurace
+        self.configure(port=port, name=name, fqbn=fqbn)
 
     def configure(self, **kwargs):
         """Aktualizuje konfiguraci boardu a sériové linky."""
@@ -33,4 +29,5 @@ class Board:
         if "fqbn" in kwargs:
             self.fqbn = kwargs["fqbn"]
             
-        self.serial.configure(**kwargs)
+        serial_data:dict = kwargs.get("serial", DEFAULT_SERIAL_CONFIG)
+        self.serial.configure(port=self.port, **serial_data)

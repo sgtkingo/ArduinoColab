@@ -4,14 +4,12 @@
 # Ignore the Jupyter Notebook checkpoints
 .ipynb_checkpoints
 
-# Ignore the Pycache
+# Ignore __pycache__ directories
 __pycache__/
+**/__pycache__/
 
 # Ignore project directories
 projects/
-
-# Ignore __pycache__ directories
-**/__pycache__/
 
 # Ignore Python bytecode files
 *.pyc
@@ -24,5 +22,8 @@ projects/
 *.docx
 *.txt
 *.gsheet
+
+#Ignore env file
+*.env
 
 

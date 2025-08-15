@@ -10,13 +10,14 @@ from arduino_colab_kernel.code.code_manager import code_manager  # globální in
 from arduino_colab_kernel.code.ino_generator import InoGenerator
 
 DEFAULT_PROJECTS_DIR = "./projects"
+DEFAULT_LOGS_DIR = "logs"
 
 class ArduinoProjectManager:
     def __init__(self):
         # Inicializace projektu
         self.project_name = ""
-        self.project_dir_rel = ""
-        self.project_dir_abs = ""
+        self.project_dir = ""
+        self.logs_dir = ""
         self.ino_generator:InoGenerator = InoGenerator(prepare_dirs=False)
         
     def project_exists(self, project_name: str, project_dir: str = DEFAULT_PROJECTS_DIR) -> bool:
@@ -28,38 +29,39 @@ class ArduinoProjectManager:
         project_dir = os.path.join(project_dir, project_name)
         return os.path.exists(project_dir) and os.path.isdir(project_dir)
     
-    def init_project(self, project_name: str, project_dir: str = DEFAULT_PROJECTS_DIR):
+    def init_project(self, project_name: str, projects_dir: str = DEFAULT_PROJECTS_DIR):
         """
         Inicializuje nový projekt s daným názvem a nastaví cílový adresář.
         project_name: název projektu
         project_dir: cesta k adresáři, kde se budou ukládat projekty
         """
         self.project_name = project_name.strip()
-        self.set_project_dir(project_dir)
+        self._set_project_dir(projects_dir)
         
-        self.ino_generator = InoGenerator(self.project_name, self.project_dir_abs)
+        projects_dir_abs = self.get_project_dir(as_abs=True)
+        self.ino_generator = InoGenerator(self.project_name, projects_dir_abs)
+        
         board_manager.default() # Vyber defaultní desku
-        code_manager.reinit()  # Re-inicializuje code manager
+        code_manager.default()  # Re-inicializuje code manager
         self.save()  # Ulož projekt
     
-    def load_project(self, project_name: str, project_dir: str = DEFAULT_PROJECTS_DIR, from_json=True):
+    def load_project(self, project_name: str, projects_dir: str = DEFAULT_PROJECTS_DIR):
         """
         Načte starší project, který se použije při ukládání souborů.
         project_name: název projektu (používá se pro složku a soubor)
         """
         self.project_name = project_name.strip()
-        self.set_project_dir(project_dir)
+        self._set_project_dir(projects_dir)
         
-        self.ino_generator = InoGenerator(self.project_name, self.project_dir_abs)
-        if from_json:
-            json_file = os.path.join(self.project_dir_abs, f"{self.project_name}.json")
-            if not os.path.exists(json_file):
-                raise FileNotFoundError(f"Projekt {self.project_name} neobsahuje žádný JSON projektový soubor.")
-            with open(json_file, "r", encoding="utf-8") as f:
-                raise NotImplementedError("Load project from JSON is not supported yet...")
-        else:
-            code = self.ino_generator.load()
-            code_manager.import_from_code(code)
+        projects_dir_abs = self.get_project_dir(as_abs=True)
+        self.ino_generator = InoGenerator(self.project_name, projects_dir_abs)
+        
+        json_file = os.path.join(projects_dir_abs, f"{self.project_name}.json")
+        if not os.path.exists(json_file):
+            raise FileNotFoundError(f"Projekt {self.project_name} neobsahuje žádný JSON projektový soubor.")
+        with open(json_file, "r", encoding="utf-8") as f:
+            json_data = json.load(f)
+            self._configure(**json_data)
         
     def get_project(self) -> tuple:
         """
@@ -80,6 +82,23 @@ class ArduinoProjectManager:
                     os.rmdir(os.path.join(root, name))
             os.rmdir(sketch_dir)
     
+    def _configure(self, **kwargs):
+        """Nakofiguruje projekt ze slovníku."""
+        if "project_name" in kwargs:
+            self.project_name = kwargs["project_name"]
+            
+        if "board" in kwargs:
+            board_data:dict = kwargs["board"]
+            board_manager.configure(**board_data)
+        else:
+            board_manager.default()
+            
+        if "code" in kwargs:
+            code_data:dict = kwargs["code"]
+            code_manager.import_from_json(code_data)
+        else:
+            code_manager.default()
+            
     def clear(self):
         """Vymaže aktuální projekt a kód v paměti."""
         code_manager.clear()
@@ -110,29 +129,40 @@ class ArduinoProjectManager:
         
         # Export project
         project_json = self.export()
-        
-        json_file = os.path.join(self.project_dir_abs, f"{self.project_name}.json")
+        projects_dir_abs = self.get_project_dir(as_abs=True)
+        json_file = os.path.join(projects_dir_abs, f"{self.project_name}.json")
         with open(json_file, "w", encoding="utf-8") as f:
             json.dump(project_json, f, indent=4, ensure_ascii=False)
         
         return self.get_project_dir(as_abs=True)       
     
-    def set_project_dir(self, projects_dir: str):
+    def _set_project_dir(self, projects_dir: str):
         """
         Nastaví cílový adresář pro ukládání .ino souborů.
-        sketch_dir: cesta k adresáři, kde se budou ukládat skici
+        projects_dir: cesta k adresáři, kde se budou ukládat skici
         """
-        project_dir = os.path.join(projects_dir, self.project_name)
-        self.project_dir_rel = project_dir
-        self.project_dir_abs = os.path.abspath(project_dir)
-        os.makedirs(self.project_dir_abs, exist_ok=True)
+        self.project_dir = os.path.join(projects_dir, self.project_name)
+        self.logs_dir = os.path.join(self.project_dir, DEFAULT_LOGS_DIR)
+            
+        projects_dir_abs = self.get_project_dir(as_abs=True)
+        os.makedirs(projects_dir_abs, exist_ok=True)
+        
+        logs_dir_abs = self.get_logs_dir(as_abs=True)
+        os.makedirs(logs_dir_abs, exist_ok=True)
     
     def get_project_dir(self, as_abs = False) -> str:
         """
         Vrací cestu ke složce se skicemi.
         as_abs: pokud True, vrací absolutní cestu, jinak relativní.
         """
-        return self.project_dir_abs if as_abs else self.project_dir_rel
+        return os.path.abspath(self.project_dir) if as_abs else os.path.relpath(self.project_dir)
+    
+    def get_logs_dir(self, as_abs = False) -> str:
+        """
+        Vrací cestu ke složce s logama.
+        as_abs: pokud True, vrací absolutní cestu, jinak relativní.
+        """
+        return os.path.abspath(self.logs_dir) if as_abs else os.path.relpath(self.logs_dir)
     
 # Singleton for magics
 project_manager = ArduinoProjectManager()
