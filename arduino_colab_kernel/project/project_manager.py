@@ -9,6 +9,7 @@ from arduino_colab_kernel.board.board_manager import board_manager  # globální
 from arduino_colab_kernel.code.code_manager import code_manager  # globální instance ArduinoCodeManager
 from arduino_colab_kernel.code.ino_generator import InoGenerator
 
+DEFAULT_PROJECT_NAME = "sketch"
 DEFAULT_PROJECTS_DIR = "./projects"
 DEFAULT_LOGS_DIR = "logs"
 
@@ -29,7 +30,7 @@ class ArduinoProjectManager:
         project_dir = os.path.join(project_dir, project_name)
         return os.path.exists(project_dir) and os.path.isdir(project_dir)
     
-    def init_project(self, project_name: str, projects_dir: str = DEFAULT_PROJECTS_DIR):
+    def init_project(self, project_name: str = DEFAULT_PROJECT_NAME, projects_dir: str = DEFAULT_PROJECTS_DIR):
         """
         Inicializuje nový projekt s daným názvem a nastaví cílový adresář.
         project_name: název projektu
@@ -45,7 +46,7 @@ class ArduinoProjectManager:
         code_manager.default()  # Re-inicializuje code manager
         self.save()  # Ulož projekt
     
-    def load_project(self, project_name: str, projects_dir: str = DEFAULT_PROJECTS_DIR):
+    def load_project(self, project_name: str = DEFAULT_PROJECT_NAME, projects_dir: str = DEFAULT_PROJECTS_DIR):
         """
         Načte starší project, který se použije při ukládání souborů.
         project_name: název projektu (používá se pro složku a soubor)
@@ -99,8 +100,10 @@ class ArduinoProjectManager:
         else:
             code_manager.default()
             
-    def clear(self):
+    def clear(self, section:str|None = None, cell_id:str|None = None):
         """Vymaže aktuální projekt a kód v paměti."""
+        if section:
+            code_manager.remove_code(section, cell_id)
         code_manager.clear()
         
     def show(self) -> str:

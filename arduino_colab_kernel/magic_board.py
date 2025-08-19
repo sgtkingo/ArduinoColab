@@ -10,18 +10,22 @@ from arduino_colab_kernel.board.board_manager import board_manager
 from arduino_colab_kernel.project.project_manager import project_manager
 from arduino_colab_kernel.board.serial_port import list_serial_ports
 
-def _help():
-    return (
-        "**%board – příkazy**\n\n"
-        "- `%board select [uno|nano]` – vybere podporovanou desku (pokud není nastaven port, zkusí se autodetekce)\n"
-        "- `%board status` – vypíše aktuální nastavení (deska, FQBN, sériový port)\n"
-        "- `%board serial [--port COMx] [--baud 115200] [--timeout 0.1] [--encoding utf-8] [--strip true|false]` – nastaví sériový port\n"
-        "- `%board compile [sketch_dir_or_ino] [--log-file path]` – přeloží sketch\n"
-        "- `%board upload  [sketch_dir_or_ino] [--log-file path]` – nahraje sketch\n"
-        "- `%board list` - vypíše dostupné podporované desky\n"
-        "- `%board ports` – vypíše dostupné sériové porty\n"
-        "- `%board help|?` – nápověda\n"
-    )
+def _help() -> str:
+    text = """
+### 🔧 Dostupné příkazy `%board`
+
+| Příkaz                          | Parametry                                                     | Popis                                                                 |
+|---------------------------------|---------------------------------------------------------------|----------------------------------------------------------------------|
+| **`%board select`**             | `[uno\|nano]`                                                 | Vybere podporovanou desku (pokud není port, zkusí se autodetekce).   |
+| **`%board status`**             | *(bez parametrů)*                                             | Vypíše aktuální nastavení (deska, FQBN, sériový port).                |
+| **`%board serial`**             | `[--port COMx] [--baud 115200] [--timeout 0.1] [--encoding utf-8] [--strip true\|false]` | Nastaví sériový port a jeho parametry.                               |
+| **`%board compile`**            | `[sketch_dir_or_ino] [--log-file path]`*(volitelné)*          | Přeloží sketch pro aktuálně zvolenou desku.                           |
+| **`%board upload`**             | `[sketch_dir_or_ino] [--log-file path]`*(volitelné)*          | Nahraje sketch na aktuálně zvolenou desku.                            |
+| **`%board list`**               | *(bez parametrů)*                                             | Vypíše dostupné podporované desky.                                   |
+| **`%board ports`**              | *(bez parametrů)*                                             | Vypíše seznam dostupných sériových portů.                            |
+| **`%board help`** / **`?`**     | *(bez parametrů)*                                             | Zobrazí tuto nápovědu.                                               |
+    """
+    return text
 
 def _parse_select_args(args: list[str]) -> tuple[str|None, dict]:
     """

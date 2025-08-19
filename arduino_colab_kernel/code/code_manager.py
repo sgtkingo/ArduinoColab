@@ -12,6 +12,7 @@ FUNCTIONS_SECTION_SEPARATOR = "//**Functions**\n"
 SETUP_SECTION_SEPARATOR = "//**Setup**\n"
 LOOP_SECTION_SEPARATOR = "//**Loop**\n"
 
+ALLOWED_SECTIONS = {"globals", "setup", "loop", "functions"}
 
 class ArduinoCodeManager:
     def __init__(self):
@@ -30,6 +31,38 @@ class ArduinoCodeManager:
         """Vymaže celý kód v paměti."""
         for key in self.sections:
             self.sections[key] = {}
+     
+    def find_cell(self, section: str, code: str) -> str|None:
+        cell_id = None
+        lines = code.split("\n")
+        for k, codes in self.sections.get(section).items():
+            for line in lines:
+                if line not in codes:
+                    break
+                else:
+                    cell_id = k
+        
+        return cell_id
+    
+    def replace_code(self, section: str, code: str):
+        if section not in self.sections:
+            raise ValueError(f"Neznámá sekce: {section}")
+        
+        cell_id = self.find_cell(section, code)
+        if cell_id not in self.sections[section]:
+            raise ValueError(f"Neznámá buňka: {cell_id}")
+        
+        self.remove_code(section, cell_id)
+        self.add_code(section, cell_id, code)
+    
+    def remove_code(self, section: str, cell_id:str|None=None):
+        if section not in self.sections:
+            raise ValueError(f"Neznámá sekce: {section}")
+        
+        if cell_id and cell_id in self.sections[section]:
+            del self.sections[section][cell_id]
+        else:
+            self.sections[section] = {}
 
     def add_code(self, section: str, cell_id:str, code: str):
         """
