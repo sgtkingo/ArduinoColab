@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arduino-colab-kernel"
+version = "0.1.1"
+description = "Jupyter magics for Arduino/ESP32"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+    { name = "Jiri Konecny", email = "jiri.konecny@vsb.cz" }
+]
+keywords = ["arduino", "esp32", "jupyter", "magics", "notebook"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "pyserial",
+    "ipython",
+]
+
+[project.urls]
+Homepage = "https://github.com/sgtkingo/ArduinoColab"
+Repository = "https://github.com/sgtkingo/ArduinoColab/colab"
+Issues = "https://github.com/sgtkingo/ArduinoColab/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["arduino_colab_kernel", "arduino_colab_kernel.*"]
+
+[tool.setuptools]
+include-package-data = true

@@ -1,2 +1,0 @@
-recursive-include arduino_colab_kernel/tools *
-recursive-include arduino_colab_kernel/demos *

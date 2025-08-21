@@ -26,4 +26,11 @@ projects/
 #Ignore env file
 *.env
 
+#Ignore virtual environment directories
+.venv/
 
+# Ignore log files
+*.log
+
+# Ignore avr directory (Arduiono libraries)
+avr/
