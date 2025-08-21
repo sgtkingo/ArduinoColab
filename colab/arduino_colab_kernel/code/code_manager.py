@@ -1,5 +1,5 @@
 # code_manager.py
-# Uchovává části Arduino kódu v paměti a umožňuje jejich správu
+# Stores parts of Arduino code in memory and allows their management
 
 from typing import List, Dict
 import os
@@ -19,7 +19,7 @@ class ArduinoCodeManager:
         self.default()
     
     def default(self):
-        # Inicializace slovníku pro sekce kódu
+        # Initialize dictionary for code sections
         self.sections: Dict[str, Dict[str, str]] = {
             "globals": {},
             "setup": {},
@@ -28,14 +28,14 @@ class ArduinoCodeManager:
         }
     
     def clear(self):
-        """Vymaže celý kód v paměti."""
+        """Clears all code in memory."""
         for key in self.sections:
             self.sections[key] = {}
      
     def find_cell(self, section: str, code: str) -> str|None:
         cell_id = None
         lines = code.split("\n")
-        for k, codes in self.sections.get(section).items():
+        for k, codes in self.sections[section].items():
             for line in lines:
                 if line not in codes:
                     break
@@ -46,18 +46,18 @@ class ArduinoCodeManager:
     
     def replace_code(self, section: str, code: str):
         if section not in self.sections:
-            raise ValueError(f"Neznámá sekce: {section}")
+            raise ValueError(f"Unknown section: {section}")
         
         cell_id = self.find_cell(section, code)
         if cell_id not in self.sections[section]:
-            raise ValueError(f"Neznámá buňka: {cell_id}")
+            raise ValueError(f"Unknown cell: {cell_id}")
         
         self.remove_code(section, cell_id)
         self.add_code(section, cell_id, code)
     
     def remove_code(self, section: str, cell_id:str|None=None):
         if section not in self.sections:
-            raise ValueError(f"Neznámá sekce: {section}")
+            raise ValueError(f"Unknown section: {section}")
         
         if cell_id and cell_id in self.sections[section]:
             del self.sections[section][cell_id]
@@ -66,33 +66,33 @@ class ArduinoCodeManager:
 
     def add_code(self, section: str, cell_id:str, code: str):
         """
-        Přidá úryvek kódu do zvolené sekce.
-        section: jedna z hodnot ["globals", "setup", "loop", "functions"]
-        code: text kódu (bez úvodních a koncových mezer)
+        Adds a code snippet to the selected section.
+        section: one of ["globals", "setup", "loop", "functions"]
+        code: code text (without leading and trailing spaces)
         """
         if section not in self.sections:
-            raise ValueError(f"Neznámá sekce: {section}")
+            raise ValueError(f"Unknown section: {section}")
         self.sections[section][cell_id] = code.strip()
 
     def get_section(self, section: str) -> List[str]:
-        """Vrací všechny úryvky kódu v dané sekci."""
+        """Returns all code snippets in the given section."""
         if section not in self.sections:
-            raise ValueError(f"Neznámá sekce: {section}")
+            raise ValueError(f"Unknown section: {section}")
         cells = self.sections[section]
         return [cell for cell in cells.values()]
 
     def export_as_code(self) -> str:
         """
-        Vygeneruje kompletní Arduino kód jako text.
+        Generates the complete Arduino code as text.
         """
         lines = []
-        # Globální proměnné
+        # Global variables
         lines.append(GLOBAL_SECTION_SEPARATOR)
         section = self.get_section("globals")
         lines.extend(section if len(section) > 0 else ["// No globals variables defined"])
         lines.append(BLOCK_GAP)
         
-        # Funkce
+        # Functions
         lines.append(FUNCTIONS_SECTION_SEPARATOR)
         section = self.get_section("functions")
         lines.extend(section if len(section) > 0 else ["// No functions defined"])
@@ -120,16 +120,16 @@ class ArduinoCodeManager:
     
     def export_as_json(self) -> Dict[str, Dict[str, str]]:
         """
-        Vygeneruje kód jako slovník, který lze snadno serializovat do JSON.
+        Generates code as a dictionary, which can be easily serialized to JSON.
         """
         return self.sections
     
     def import_from_code(self, code: str):
         """
-        Načte kód z textu a rozdělí ho do sekcí.
-        code: kompletní Arduino kód jako text
+        Loads code from text and splits it into sections.
+        code: complete Arduino code as text
         """
-        self.clear()  # Vymaže stávající kód
+        self.clear()  # Clears existing code
         lines = code.splitlines()
         current_section = None
         cell_id = 0
@@ -163,18 +163,18 @@ class ArduinoCodeManager:
                     self.sections[current_section][str(cell_id)] = stripped_line
                     cell_id += 1
                 else:
-                    raise ValueError("Kód neobsahuje žádnou sekci nebo je nesprávně formátován.")
+                    raise ValueError("Code does not contain any section or is incorrectly formatted.")
                 
     def import_from_json(self, json_data: Dict[str, Dict[str, str]]):
         """
-        Načte kód z JSON slovníku.
-        json_data: slovník s kódem ve formátu {sekce: {id_buňky: kód}}
+        Loads code from a JSON dictionary.
+        json_data: dictionary with code in the format {section: {cell_id: code}}
         """
         self.clear()
-        # Kontrola platnosti sekcí
+        # Check validity of sections
         valid_sections = {"globals", "setup", "loop", "functions"}
         if not all(section in valid_sections for section in json_data.keys()):
-            raise ValueError("Neplatné sekce v JSON datech.")
+            raise ValueError("Invalid sections in JSON data.")
         self.sections = json_data
         
     

@@ -1,7 +1,7 @@
-from arduino_colab_kernel.board.serial_port import SerialPort
+from arduino_colab_kernel.bridge.serial_port import SerialPort
 # board.py
-# Třída Board: drží konfiguraci cílové desky (name, fqbn) a kompozici SerialPortu.
-# Board samotný neřeší build/upload (to řeší BoardManager), pouze sériové I/O deleguje na SerialPort.
+# Board class: holds configuration of the target board (name, fqbn) and composition of SerialPort.
+# Board itself does not handle build/upload (that is handled by BoardManager), only delegates serial I/O to SerialPort.
 DEFAULT_SERIAL_CONFIG = {
     "baudrate": 115200,
     "timeout": 0.1,
@@ -10,18 +10,18 @@ DEFAULT_SERIAL_CONFIG = {
 }
 
 class Board:
-    """Reprezentace HW desky + sériová komunikace přes kompozici SerialPortu."""
+    """Representation of HW board + serial communication via SerialPort composition."""
 
     def __init__(self, name: str, fqbn: str, port: str|None = None):
         if not port:
-            port = SerialPort.suggest_port()  # Automaticky navrhne port, pokud není zadán
+            port = SerialPort.suggest_port()  # Automatically suggests port if not provided
 
-        # Kompozice – sériová linka je vyčleněná do samostatné třídy
+        # Composition – serial line is separated into its own class
         self.serial = SerialPort()
         self.configure(port=port, name=name, fqbn=fqbn)
 
     def configure(self, **kwargs):
-        """Aktualizuje konfiguraci boardu a sériové linky."""
+        """Updates board and serial line configuration."""
         if "port" in kwargs:
             self.port = kwargs["port"]
         if "name" in kwargs:

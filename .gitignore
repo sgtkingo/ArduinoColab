@@ -20,7 +20,6 @@ projects/
 #Ignore documents
 *.pdf
 *.docx
-*.txt
 *.gsheet
 
 #Ignore env file

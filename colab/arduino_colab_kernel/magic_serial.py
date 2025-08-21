@@ -1,34 +1,34 @@
 # magic_serial.py
-# Magická buňka %%serial pro práci se sériovou linkou.
+# Magic cell %%serial for working with the serial port.
 
 import shlex
 from IPython.core.magic import Magics, magics_class, line_magic
 from IPython.display import Markdown, display
-from arduino_colab_kernel.board.board_manager import board_manager  # globální instance Boardboard_manager
+from arduino_colab_kernel.bridge.bridge import bridge_manager  # Use bridge_manager instead of direct board access
 
 def _help() -> str:
-    """Vrací nápovědu pro %%serial."""
+    """Returns help for %%serial."""
     return (
-        "**Použití:** `%%serial [listen|read|write|help] [options]`\n\n"
-        "**Příkazy:**\n"
-        "- `listen` – čte sériový výstup kontinuálně po dobu `--duration` nebo do přerušení (Ctrl+C)\n"
-        "- `read` – přečte zadaný počet řádků (`--lines`)\n"
-        "- `write` – zapíše data na sériový port (`--data` nebo obsah buňky)\n"
-        "- `help` – zobrazí tuto nápovědu\n\n"
-        "**Společné požadavky:**\n"
-        "- Musí být nastavena deska (`%board set`) a sériový port (`%board serial` nebo autodetekce)\n\n"
-        "**Options pro `listen`:**\n"
-        "- `--duration <sekundy>` – délka poslechu; pokud není uvedeno, běží do Ctrl+C\n"
-        "- `--prefix <text>` – filtruje řádky začínající daným prefixem\n\n"
-        "**Options pro `read`:**\n"
-        "- `--lines <počet>` – počet řádků k přečtení (výchozí 1)\n\n"
-        "**Options pro `write`:**\n"
-        "- `--data <text>` – text k odeslání; pokud není uvedeno, použije se obsah buňky\n"
-        "- `--no-nl` – neposílat na konec zprávy znak nového řádku (`\\n`)\n"
+        "**Usage:** `%%serial [listen|read|write|help] [options]`\n\n"
+        "**Commands:**\n"
+        "- `listen` – reads serial output continuously for `--duration` or until interrupted (Ctrl+C)\n"
+        "- `read` – reads the specified number of lines (`--lines`)\n"
+        "- `write` – writes data to the serial port (`--data` or cell content)\n"
+        "- `help` – shows this help\n\n"
+        "**Common requirements:**\n"
+        "- Board must be set (`%board set`) and serial port (`%board serial` or autodetect)\n\n"
+        "**Options for `listen`:**\n"
+        "- `--duration <seconds>` – listening duration; if not set, runs until Ctrl+C\n"
+        "- `--prefix <text>` – filters lines starting with the given prefix\n\n"
+        "**Options for `read`:**\n"
+        "- `--lines <count>` – number of lines to read (default 1)\n\n"
+        "**Options for `write`:**\n"
+        "- `--data <text>` – text to send; if not set, uses cell content\n"
+        "- `--no-nl` – do not send newline (`\\n`) at the end of the message\n"
     )
 
 def _parse_serial_args(line: str):
-    """Rozparsuje argumenty pro listen/read/write."""
+    """Parses arguments for listen/read/write."""
     args = shlex.split(line)
     if not args:
         return "", {}
@@ -54,7 +54,7 @@ def _parse_serial_args(line: str):
         elif a == "--no-nl":
             opts["no_nl"] = True
         else:
-            display(Markdown(f"**Neznámý argument:** `{a}`"))
+            display(Markdown(f"**Unknown argument:** `{a}`"))
         i += 1
     return cmd, opts
 
@@ -64,7 +64,7 @@ class SerialMagic(Magics):
 
     @line_magic
     def serial(self, line, cell=None):
-        """Magická buňka %%serial pro práci se sériovým portem."""
+        """Magic cell %%serial for working with the serial port."""
         cmd, opts = _parse_serial_args(line)
 
         if cmd == "help" or cmd == "":
@@ -72,40 +72,38 @@ class SerialMagic(Magics):
             return
 
         if cmd not in ("listen", "read", "write"):
-            display(Markdown("**Neznámý příkaz.**\n\n" + _help()))
+            display(Markdown("**Unknown command.**\n\n" + _help()))
             return
 
         try:
-            board = board_manager.require_board()
-            sp = board.serial
-            sp.open()
+            bridge_manager.open_serial()
 
             if cmd == "listen":
                 duration = opts["duration"]
                 prefix = opts["prefix"]
                 display(Markdown(
-                    f"📡 **Listening** – port: `{sp.port}`, baud: `{sp.baudrate}`"
-                    + (f", doba: {duration}s" if duration else ", doba: neomezeně")
-                    + (f", filtr prefix: `{prefix}`" if prefix else "")
+                    f"📡 **Listening**"
+                    + (f", duration: {duration}s" if duration else ", duration: unlimited")
+                    + (f", filter prefix: `{prefix}`" if prefix else "")
                 ))
-                sp.listen(duration=duration, prefix=prefix, printer=print)
-                display(Markdown("✅ **Konec poslechu.**"))
+                bridge_manager.serial_listen(duration=duration, prefix=prefix)
+                display(Markdown("✅ **Listening ended.**"))
 
             elif cmd == "read":
                 lines = max(1, opts["lines"])
-                for ln in sp.read(lines=lines):
+                for ln in bridge_manager.serial_read(lines=lines):
                     print(ln)
 
             elif cmd == "write":
                 payload = opts["data"] if opts["data"] is not None else (cell or "")
-                sp.write(payload, append_newline=not opts["no_nl"])
-                display(Markdown(f"✉️ **Odesláno:** `{payload.strip()}`"))
+                bridge_manager.serial_write(payload, append_newline=not opts["no_nl"])
+                display(Markdown(f"✉️ **Sent:** `{payload.strip()}`"))
 
         except Exception as e:
-            display(Markdown(f"**Chyba:** `{e}`"))
+            display(Markdown(f"**Error:** `{e}`"))
         finally:
             try:
-                sp.close()
+                bridge_manager.close_serial()
             except Exception:
                 pass
 

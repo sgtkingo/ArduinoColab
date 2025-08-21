@@ -1,5 +1,5 @@
 # ino_generator.py
-# Generuje a ukládá .ino soubor z připraveného kódu
+# Generates and saves a .ino file from prepared code
 
 import os
 
@@ -14,24 +14,24 @@ class InoGenerator:
 
     def export(self, code: str):
         """
-        Zapíše kód do .ino souboru v cílovém adresáři.
-        code: kompletní Arduino kód jako text
+        Writes code to a .ino file in the target directory.
+        code: complete Arduino code as text
         """
         with open(self.ino_file, "w", encoding="utf-8") as f:
             f.write(code)
             
     def load(self) -> str:
         """
-        Načte kód z .ino souboru.
-        Vrací obsah souboru jako text.
+        Loads code from the .ino file.
+        Returns the file content as text.
         """
         ino_file = self.get_path()
         if not os.path.exists(ino_file):
-            raise FileNotFoundError(f"Nenalezen žádný .ino soubor s cestou: {ino_file}.")
+            raise FileNotFoundError(f"No .ino file found at path: {ino_file}.")
         
         with open(ino_file, "r", encoding="utf-8") as f:
             return f.read()
 
     def get_path(self) -> str:
-        """Vrací cestu ke generovanému .ino souboru."""
+        """Returns the path to the generated .ino file."""
         return  os.path.abspath(self.ino_file)

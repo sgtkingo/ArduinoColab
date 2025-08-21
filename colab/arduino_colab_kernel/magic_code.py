@@ -1,35 +1,36 @@
 # magic_code.py
-# Magie %%code – ukládá kód do sekcí (globals/setup/loop/functions) s volitelným ID buňky.
-# Obsahuje přehlednou nápovědu přes _help_text().
+# Magic %%code – saves code into sections (globals/setup/loop/functions) with optional cell ID.
+# Contains clear help via _help_text().
 
 import shlex
 from IPython.core.magic import Magics, magics_class, cell_magic
 from IPython.display import Markdown, display
 
 from arduino_colab_kernel.code.code_manager import code_manager
+from arduino_colab_kernel.project.project_manager import project_manager
 from arduino_colab_kernel.code.code_manager import ALLOWED_SECTIONS
 
 
 def _help() -> str:
-    # Vrací Markdown nápovědu jako text (volající si rozhodne o zobrazení)
+    # Returns Markdown help as text (caller decides on display)
     return """
-### 🧩 Dostupné příkazy `%%code`
+### 🧩 Available `%%code` commands
 
-| Příkaz                   | Parametry                      | Popis                                                                 |
-|--------------------------|--------------------------------|------------------------------------------------------------------------|
-| **`%%code globals`**     | `[bunka_id]` *(volitelné)*     | Uloží kód do sekce **globals** (deklarace proměnných, konstant).      |
-| **`%%code setup`**       | `[bunka_id]` *(volitelné)*     | Uloží kód do sekce **setup** (inicializace, běží jednou).             |
-| **`%%code loop`**        | `[bunka_id]` *(volitelné)*     | Uloží kód do sekce **loop** (hlavní smyčka programu).                 |
-| **`%%code functions`**   | `[bunka_id]` *(volitelné)*     | Uloží kód do sekce **functions** (pomocné funkce, knihovní kód).      |
-| **`%%code help`** / `?`  | *(bez parametrů)*              | Zobrazí tuto nápovědu.                                                |
+| Command                  | Parameters                     | Description                                                             |
+|--------------------------|--------------------------------|-------------------------------------------------------------------------|
+| **`%%code globals`**     | `[cell_id]` *(optional)*       | Saves code to **globals** section (variable/constant declarations).     |
+| **`%%code setup`**       | `[cell_id]` *(optional)*       | Saves code to **setup** section (initialization, runs once).            |
+| **`%%code loop`**        | `[cell_id]` *(optional)*       | Saves code to **loop** section (main program loop).                     |
+| **`%%code functions`**   | `[cell_id]` *(optional)*       | Saves code to **functions** section (helper/library code).              |
+| **`%%code help`** / `?`  | *(no parameters)*              | Shows this help.                                                        |
 
 **Syntax:**
-- `%%code <sekce>` nebo `%%code <sekce> <bunka_id>`
-- Pokud **<bunka_id>** neuvedeš, použije se výchozí `"0"`.
+- `%%code <section>` or `%%code <section> <cell_id>`
+- If **<cell_id>** is not provided, the default `"0"` is used.
 
-**Povolené sekce:** `globals`, `setup`, `loop`, `functions`.
+**Allowed sections:** `globals`, `setup`, `loop`, `functions`.
 
-**Příklady:**
+**Examples:**
 ```python
 %%code globals
 int led = 13;
@@ -49,25 +50,27 @@ int readSensor() { return analogRead(A0); }
 class CodeMagics(Magics):
     @cell_magic
     def code(self, line, cell):
-        # --- Parsování argumentů (bezpečně přes shlex) ---
+        # --- Argument parsing (safely via shlex) ---
         parts = shlex.split(line.strip()) if line else []
         section = parts[0].lower() if parts else None
 
-        # --- Help / prázdný vstup ---
+        # --- Help / empty input ---
         if section in (None, "help", "?"):
             display(Markdown(_help()))
-        # --- Validace sekce ---
+        # --- Section validation ---
         elif section in ALLOWED_SECTIONS:
-            # --- ID buňky (volitelné) ---
+            # --- Cell ID (optional) ---
             cell_id = parts[1] if len(parts) > 1 else "0"
-            # --- Uložení kódu do správné sekce/buňky ---
+            # --- Save code to correct section/cell ---
             try:
                 code_manager.add_code(section, cell_id, cell)
-                display(Markdown(f"`Kód aktualizován` &nbsp;|&nbsp; sekce: `{section}`, buňka: `{cell_id}`."))
+                # Save changes
+                project_manager.save()
+                display(Markdown(f"`Code updated` &nbsp;|&nbsp; section: `{section}`, cell: `{cell_id}`."))
             except Exception as e:
-                display(Markdown(f"**Chyba při ukládání kódu:** `{e}`"))
+                display(Markdown(f"**Error saving code:** `{e}`"))
         else:
-            display(Markdown(f"**Neznámá sekce kodu nebo příkaz:** `{section}`\n\n" + _help()))
+            display(Markdown(f"**Unknown code section or command:** `{section}`\n\n" + _help()))
 
 def load_ipython_extension(ipython):
     ipython.register_magics(CodeMagics)

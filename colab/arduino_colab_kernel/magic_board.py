@@ -1,5 +1,5 @@
 # magic_board.py
-# Line magic %board – nastavení desky, sériové linky, build/upload a utility (s autodetekcí portu a logováním).
+# Line magic %board – board selection, serial port, build/upload and utilities (with port autodetection and logging).
 
 import os
 import shlex
@@ -8,29 +8,30 @@ from IPython.display import Markdown, display
 
 from arduino_colab_kernel.board.board_manager import board_manager
 from arduino_colab_kernel.project.project_manager import project_manager
-from arduino_colab_kernel.board.serial_port import list_serial_ports
+from arduino_colab_kernel.bridge.bridge import bridge_manager
+from arduino_colab_kernel.bridge.serial_port import list_serial_ports
 
 def _help() -> str:
     text = """
-### 🔧 Dostupné příkazy `%board`
+### 🔧 Available `%board` commands
 
-| Příkaz                          | Parametry                                                     | Popis                                                                 |
-|---------------------------------|---------------------------------------------------------------|----------------------------------------------------------------------|
-| **`%board select`**             | `[uno\|nano]`                                                 | Vybere podporovanou desku (pokud není port, zkusí se autodetekce).   |
-| **`%board status`**             | *(bez parametrů)*                                             | Vypíše aktuální nastavení (deska, FQBN, sériový port).                |
-| **`%board serial`**             | `[--port COMx] [--baud 115200] [--timeout 0.1] [--encoding utf-8] [--strip true\|false]` | Nastaví sériový port a jeho parametry.                               |
-| **`%board compile`**            | `[sketch_dir_or_ino] [--log-file path]`*(volitelné)*          | Přeloží sketch pro aktuálně zvolenou desku.                           |
-| **`%board upload`**             | `[sketch_dir_or_ino] [--log-file path]`*(volitelné)*          | Nahraje sketch na aktuálně zvolenou desku.                            |
-| **`%board list`**               | *(bez parametrů)*                                             | Vypíše dostupné podporované desky.                                   |
-| **`%board ports`**              | *(bez parametrů)*                                             | Vypíše seznam dostupných sériových portů.                            |
-| **`%board help`** / **`?`**     | *(bez parametrů)*                                             | Zobrazí tuto nápovědu.                                               |
+| Command                          | Parameters                                                     | Description                                                           |
+|-----------------------------------|---------------------------------------------------------------|-----------------------------------------------------------------------|
+| **`%board select`**               | `[uno\|nano]`                                                 | Selects a supported board (if port is not set, tries autodetection).  |
+| **`%board status`**               | *(no parameters)*                                             | Shows current settings (board, FQBN, serial port).                    |
+| **`%board serial`**               | `[--port COMx] [--baud 115200] [--timeout 0.1] [--encoding utf-8] [--strip true\|false]` | Sets serial port and its parameters.                                  |
+| **`%board compile`**              | `[sketch_dir_or_ino] [--log-file path]`*(optional)*           | Compiles sketch for the currently selected board.                     |
+| **`%board upload`**               | `[sketch_dir_or_ino] [--log-file path]`*(optional)*           | Uploads sketch to the currently selected board.                       |
+| **`%board list`**                 | *(no parameters)*                                             | Lists available supported boards.                                     |
+| **`%board ports`**                | *(no parameters)*                                             | Lists available serial ports.                                         |
+| **`%board help`** / **`?`**       | *(no parameters)*                                             | Shows this help.                                                      |
     """
     return text
 
 def _parse_select_args(args: list[str]) -> tuple[str|None, dict]:
     """
-    Parsuje argumenty pro '%board select'.
-    Vrací (board_name, serial_cfg_dict), kde serial_cfg_dict obsahuje pouze 'port' (pokud je zadaný).
+    Parses arguments for '%board select'.
+    Returns (board_name, serial_cfg_dict), where serial_cfg_dict contains only 'port' (if specified).
     """
     if not args:
         return None, {}
@@ -42,7 +43,7 @@ def _parse_select_args(args: list[str]) -> tuple[str|None, dict]:
         if a == "--port":
             i += 1; cfg["port"] = args[i]
         else:
-            display(Markdown(f"**Neznámý argument pro `set`:** `{a}`"))
+            display(Markdown(f"**Unknown argument for `set`:** `{a}`"))
         i += 1
     return name, cfg
 
@@ -63,13 +64,13 @@ def _parse_serial_args(args: list[str]) -> dict:
         elif a in ("--strip", "--autostrip"):
             i += 1; cfg["autostrip"] = args[i].lower() in ("1", "true", "yes", "y")
         else:
-            display(Markdown(f"**Neznámý argument pro `serial`:** `{a}`"))
+            display(Markdown(f"**Unknown argument for `serial`:** `{a}`"))
         i += 1
     return {k: v for k, v in cfg.items() if v is not None}
 
 
 def _parse_logfile(args: list[str]) -> tuple[list[str], str | None]:
-    """Vrátí (args_bez_log, log_file|None)."""
+    """Returns (args_without_log, log_file|None)."""
     out = []
     log_file = None
     i = 0
@@ -77,7 +78,7 @@ def _parse_logfile(args: list[str]) -> tuple[list[str], str | None]:
         a = args[i]
         if a == "--log-file":
             if i + 1 >= len(args):
-                display(Markdown("**Chybí hodnota pro `--log-file`.**"))
+                display(Markdown("**Missing value for `--log-file`.**"))
                 return args, None
             log_file = args[i + 1]
             i += 2
@@ -107,37 +108,37 @@ class BoardMagic(Magics):
             if cmd == "list":
                 boards = board_manager.list_boards().items()
                 if boards:
-                    display(Markdown("**Dostupné desky:**  \n" + "\n".join(f"- `{name}` (FQBN: `{fqbn}`)" for name,fqbn in boards)))
+                    display(Markdown("**Available boards:**  \n" + "\n".join(f"- `{name}` (FQBN: `{fqbn}`)" for name,fqbn in boards)))
                 else:
-                    display(Markdown("**Nebyla nalezena žádná podporovaná deska.**"))
+                    display(Markdown("**No supported board found.**"))
                 return
             if cmd == "select":
                 name, cfg = _parse_select_args(rest)
                 if not name:
-                    display(Markdown("**Použití:** `%board select [uno|nano] [--port COMx]`"))
+                    display(Markdown("**Usage:** `%board select [uno|nano] [--port COMx]`"))
                     return
 
-                # Nastavení desky
+                # Set board
                 board_manager.select_board(name)
                 b = board_manager.require_board()
 
-                # Nastavení konfigurace desky
+                # Set board configuration
                 b.configure(**cfg)
 
-                # Port – buď explicitně zadaný, nebo autodetekce
+                # Port – either explicitly set or autodetected
                 if "port" in cfg:
                     display(Markdown(
-                        f"✅ Nastavena deska **{b.name}** (FQBN `{b.fqbn}`) &nbsp;|&nbsp; Port: `{cfg['port']}` (explicitní)"
+                        f"✅ Board **{b.name}** set (FQBN `{b.fqbn}`) &nbsp;|&nbsp; Port: `{cfg['port']}` (explicit)"
                     ))
                 else:
                     if b.port:
                         display(Markdown(
-                            f"✅ Nastavena deska **{b.name}** (FQBN `{b.fqbn}`) &nbsp;|&nbsp; Auto port: `{b.port}`"
+                            f"✅ Board **{b.name}** set (FQBN `{b.fqbn}`) &nbsp;|&nbsp; Auto port: `{b.port}`"
                         ))
                     else:
                         display(Markdown(
-                            f"✅ Nastavena deska **{b.name}** (FQBN `{b.fqbn}`) &nbsp;|&nbsp; "
-                            "_Port n/d – nastav `%board serial --port COMx`_"
+                            f"✅ Board **{b.name}** set (FQBN `{b.fqbn}`) &nbsp;|&nbsp; "
+                            "_Port n/a – set `%board serial --port COMx`_"
                         ))
                 return
 
@@ -146,9 +147,9 @@ class BoardMagic(Magics):
                 sp = b.serial
                 display(Markdown(
                     f"**Board status**\n\n"
-                    f"- Deska: `{b.name}`\n"
+                    f"- Board: `{b.name}`\n"
                     f"- FQBN: `{b.fqbn}`\n"
-                    f"- Port: `{sp.port or 'nenastaveno'}`\n"
+                    f"- Port: `{sp.port or 'not set'}`\n"
                     f"- Baud: `{sp.baudrate}`\n"
                     f"- Timeout: `{sp.timeout}`\n"
                     f"- Encoding: `{sp.encoding}`\n"
@@ -161,14 +162,14 @@ class BoardMagic(Magics):
                 kv = _parse_serial_args(rest)
                 if not kv:
                     display(Markdown(
-                        "**Použití:** `%board serial --port COMx [--baud 115200] [--timeout 0.1] "
+                        "**Usage:** `%board serial --port COMx [--baud 115200] [--timeout 0.1] "
                         "[--encoding utf-8] [--strip true|false]`"
                     ))
                     return
                 b.configure(**kv)
                 sp = b.serial
                 display(Markdown(
-                    f"🔧 Sériová konfigurace: port=`{sp.port}` baud=`{sp.baudrate}` "
+                    f"🔧 Serial configuration: port=`{sp.port}` baud=`{sp.baudrate}` "
                     f"timeout=`{sp.timeout}` enc=`{sp.encoding}` strip=`{sp.autostrip}`"
                 ))
                 return
@@ -179,9 +180,9 @@ class BoardMagic(Magics):
                     rest, log_file = _parse_logfile(rest)
                     
                 sketch_file = project_manager.save()
-                ok = board_manager.compile(sketch_file, log_file=log_file)
+                ok = bridge_manager.compile(sketch_file, log_file=log_file)
                 if ok:
-                    msg = "✅ **Kompilace úspěšná.**"
+                    msg = "✅ **Compilation successful.**"
                     if log_file:
                         msg += f" Log: `{os.path.abspath(log_file)}`"
                     display(Markdown(msg))
@@ -193,9 +194,9 @@ class BoardMagic(Magics):
                     rest, log_file = _parse_logfile(rest)
                     
                 sketch_file = project_manager.save()
-                ok = board_manager.upload(sketch_file, log_file=log_file)
+                ok = bridge_manager.upload(sketch_file, log_file=log_file)
                 if ok:
-                    msg = "🚀 **Nahrávání dokončeno.**"
+                    msg = "🚀 **Upload complete.**"
                     if log_file:
                         msg += f" Log: `{os.path.abspath(log_file)}`"
                     display(Markdown(msg))
@@ -204,15 +205,15 @@ class BoardMagic(Magics):
             if cmd == "ports":
                 ports = list_serial_ports()
                 if ports:
-                    display(Markdown("**Dostupné sériové porty:**  \n" + "\n".join(f"- `{p}`" for p in ports)))
+                    display(Markdown("**Available serial ports:**  \n" + "\n".join(f"- `{p}`" for p in ports)))
                 else:
-                    display(Markdown("**Nebyl nalezen žádný sériový port.**"))
+                    display(Markdown("**No serial port found.**"))
                 return
 
-            display(Markdown(f"**Neznámý příkaz:** `{cmd}`\n\n" + _help()))
+            display(Markdown(f"**Unknown command:** `{cmd}`\n\n" + _help()))
 
         except Exception as e:
-            display(Markdown(f"**Chyba:** `{e}`"))
+            display(Markdown(f"**Error:** `{e}`"))
 
 
 def load_ipython_extension(ipython):
