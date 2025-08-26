@@ -12,6 +12,12 @@ from arduino_colab_kernel.bridge.bridge import bridge_manager
 from arduino_colab_kernel.bridge.serial_port import list_serial_ports
 
 def _help() -> str:
+    """
+    Returns help text for the %board magic command.
+
+    Returns:
+        str: Markdown-formatted help text.
+    """
     text = """
 ### 🔧 Available `%board` commands
 
@@ -31,7 +37,12 @@ def _help() -> str:
 def _parse_select_args(args: list[str]) -> tuple[str|None, dict]:
     """
     Parses arguments for '%board select'.
-    Returns (board_name, serial_cfg_dict), where serial_cfg_dict contains only 'port' (if specified).
+
+    Args:
+        args (list[str]): List of arguments.
+
+    Returns:
+        tuple[str|None, dict]: (board_name, serial_cfg_dict), where serial_cfg_dict contains only 'port' (if specified).
     """
     if not args:
         return None, {}
@@ -47,9 +58,17 @@ def _parse_select_args(args: list[str]) -> tuple[str|None, dict]:
         i += 1
     return name, cfg
 
-
 def _parse_serial_args(args: list[str]) -> dict:
-    cfg = {"port": None|str, "baudrate": None|str, "timeout": None|str, "encoding": None|str, "autostrip": None|str}
+    """
+    Parses arguments for '%board serial'.
+
+    Args:
+        args (list[str]): List of arguments.
+
+    Returns:
+        dict: Serial configuration dictionary.
+    """
+    cfg = {"port": None, "baudrate": None, "timeout": None, "encoding": None, "autostrip": None}
     i = 0
     while i < len(args):
         a = args[i]
@@ -68,9 +87,16 @@ def _parse_serial_args(args: list[str]) -> dict:
         i += 1
     return {k: v for k, v in cfg.items() if v is not None}
 
-
 def _parse_logfile(args: list[str]) -> tuple[list[str], str | None]:
-    """Returns (args_without_log, log_file|None)."""
+    """
+    Parses log file argument from a list of arguments.
+
+    Args:
+        args (list[str]): List of arguments.
+
+    Returns:
+        tuple[list[str], str|None]: (args_without_log, log_file|None)
+    """
     out = []
     log_file = None
     i = 0
@@ -87,12 +113,23 @@ def _parse_logfile(args: list[str]) -> tuple[list[str], str | None]:
         i += 1
     return out, log_file
 
-
 @magics_class
 class BoardMagic(Magics):
+    """
+    Implements the %board magic command for board selection, configuration, and utilities.
+    """
 
     @line_magic
     def board(self, line: str = ""):
+        """
+        Handles the %board magic command.
+
+        Args:
+            line (str): The command line input after %board.
+
+        Raises:
+            Displays errors as Markdown output, does not raise.
+        """
         args = shlex.split(line)
         if not args:
             display(Markdown(_help()))
@@ -105,109 +142,130 @@ class BoardMagic(Magics):
             if cmd == "help" or cmd == "?":
                 display(Markdown(_help()))
                 return
+
             if cmd == "list":
-                boards = board_manager.list_boards().items()
-                if boards:
-                    display(Markdown("**Available boards:**  \n" + "\n".join(f"- `{name}` (FQBN: `{fqbn}`)" for name,fqbn in boards)))
-                else:
-                    display(Markdown("**No supported board found.**"))
+                try:
+                    boards = board_manager.list_boards().items()
+                    if boards:
+                        display(Markdown("**Available boards:**  \n" + "\n".join(f"- `{name}` (FQBN: `{fqbn}`)" for name, fqbn in boards)))
+                    else:
+                        display(Markdown("**No supported board found.**"))
+                except Exception as e:
+                    display(Markdown(f"**Error listing boards:** `{e}`"))
                 return
+
             if cmd == "select":
-                name, cfg = _parse_select_args(rest)
-                if not name:
-                    display(Markdown("**Usage:** `%board select [uno|nano] [--port COMx]`"))
-                    return
+                try:
+                    name, cfg = _parse_select_args(rest)
+                    if not name:
+                        display(Markdown("**Usage:** `%board select [uno|nano] [--port COMx]`"))
+                        return
 
-                # Set board
-                board_manager.select_board(name)
-                b = board_manager.require_board()
+                    # Set board
+                    board_manager.select_board(name)
+                    b = board_manager.require_board()
 
-                # Set board configuration
-                b.configure(**cfg)
+                    # Set board configuration
+                    b.configure(**cfg)
 
-                # Port – either explicitly set or autodetected
-                if "port" in cfg:
-                    display(Markdown(
-                        f"✅ Board **{b.name}** set (FQBN `{b.fqbn}`) &nbsp;|&nbsp; Port: `{cfg['port']}` (explicit)"
-                    ))
-                else:
-                    if b.port:
+                    # Port – either explicitly set or autodetected
+                    if "port" in cfg:
                         display(Markdown(
-                            f"✅ Board **{b.name}** set (FQBN `{b.fqbn}`) &nbsp;|&nbsp; Auto port: `{b.port}`"
+                            f"✅ Board **{b.name}** set (FQBN `{b.fqbn}`) &nbsp;|&nbsp; Port: `{cfg['port']}` (explicit)"
                         ))
                     else:
-                        display(Markdown(
-                            f"✅ Board **{b.name}** set (FQBN `{b.fqbn}`) &nbsp;|&nbsp; "
-                            "_Port n/a – set `%board serial --port COMx`_"
-                        ))
+                        if b.port:
+                            display(Markdown(
+                                f"✅ Board **{b.name}** set (FQBN `{b.fqbn}`) &nbsp;|&nbsp; Auto port: `{b.port}`"
+                            ))
+                        else:
+                            display(Markdown(
+                                f"✅ Board **{b.name}** set (FQBN `{b.fqbn}`) &nbsp;|&nbsp; "
+                                "_Port n/a – set `%board serial --port COMx`_"
+                            ))
+                except Exception as e:
+                    display(Markdown(f"**Error selecting board:** `{e}`"))
                 return
 
             if cmd == "status":
-                b = board_manager.require_board()
-                sp = b.serial
-                display(Markdown(
-                    f"**Board status**\n\n"
-                    f"- Board: `{b.name}`\n"
-                    f"- FQBN: `{b.fqbn}`\n"
-                    f"- Port: `{sp.port or 'not set'}`\n"
-                    f"- Baud: `{sp.baudrate}`\n"
-                    f"- Timeout: `{sp.timeout}`\n"
-                    f"- Encoding: `{sp.encoding}`\n"
-                    f"- Auto strip: `{sp.autostrip}`\n"
-                ))
+                try:
+                    b = board_manager.require_board()
+                    sp = b.serial
+                    display(Markdown(
+                        f"**Board status**\n\n"
+                        f"- Board: `{b.name}`\n"
+                        f"- FQBN: `{b.fqbn}`\n"
+                        f"- Port: `{sp.port or 'not set'}`\n"
+                        f"- Baud: `{sp.baudrate}`\n"
+                        f"- Timeout: `{sp.timeout}`\n"
+                        f"- Encoding: `{sp.encoding}`\n"
+                        f"- Auto strip: `{sp.autostrip}`\n"
+                    ))
+                except Exception as e:
+                    display(Markdown(f"**Error showing status:** `{e}`"))
                 return
 
             if cmd == "serial":
-                b = board_manager.require_board()
-                kv = _parse_serial_args(rest)
-                if not kv:
+                try:
+                    b = board_manager.require_board()
+                    kv = _parse_serial_args(rest)
+                    if not kv:
+                        display(Markdown(
+                            "**Usage:** `%board serial --port COMx [--baud 115200] [--timeout 0.1] "
+                            "[--encoding utf-8] [--strip true|false]`"
+                        ))
+                        return
+                    b.configure(**kv)
+                    sp = b.serial
                     display(Markdown(
-                        "**Usage:** `%board serial --port COMx [--baud 115200] [--timeout 0.1] "
-                        "[--encoding utf-8] [--strip true|false]`"
+                        f"🔧 Serial configuration: port=`{sp.port}` baud=`{sp.baudrate}` "
+                        f"timeout=`{sp.timeout}` enc=`{sp.encoding}` strip=`{sp.autostrip}`"
                     ))
-                    return
-                b.configure(**kv)
-                sp = b.serial
-                display(Markdown(
-                    f"🔧 Serial configuration: port=`{sp.port}` baud=`{sp.baudrate}` "
-                    f"timeout=`{sp.timeout}` enc=`{sp.encoding}` strip=`{sp.autostrip}`"
-                ))
+                except Exception as e:
+                    display(Markdown(f"**Error configuring serial:** `{e}`"))
                 return
 
             if cmd == "compile":
-                log_file = os.path.join(project_manager.get_logs_dir(as_abs=False),"compile.log")
-                if rest:
-                    rest, log_file = _parse_logfile(rest)
-                    
-                sketch_file = project_manager.save()
-                ok = bridge_manager.compile(sketch_file, log_file=log_file)
-                if ok:
-                    msg = "✅ **Compilation successful.**"
-                    if log_file:
-                        msg += f" Log: `{os.path.abspath(log_file)}`"
-                    display(Markdown(msg))
+                try:
+                    log_file = os.path.join(project_manager.get_logs_dir(as_abs=False), "compile.log")
+                    if rest:
+                        rest, log_file = _parse_logfile(rest)
+                    sketch_file = project_manager.save()
+                    ok = bridge_manager.compile(sketch_file, log_file=log_file)
+                    if ok:
+                        msg = "✅ **Compilation successful.**"
+                        if log_file:
+                            msg += f" Log: `{os.path.abspath(log_file)}`"
+                        display(Markdown(msg))
+                except Exception as e:
+                    display(Markdown(f"**Error during compilation:** `{e}`"))
                 return
 
             if cmd == "upload":
-                log_file = os.path.join(project_manager.get_logs_dir(as_abs=False),"upload.log")
-                if rest:
-                    rest, log_file = _parse_logfile(rest)
-                    
-                sketch_file = project_manager.save()
-                ok = bridge_manager.upload(sketch_file, log_file=log_file)
-                if ok:
-                    msg = "🚀 **Upload complete.**"
-                    if log_file:
-                        msg += f" Log: `{os.path.abspath(log_file)}`"
-                    display(Markdown(msg))
+                try:
+                    log_file = os.path.join(project_manager.get_logs_dir(as_abs=False), "upload.log")
+                    if rest:
+                        rest, log_file = _parse_logfile(rest)
+                    sketch_file = project_manager.save()
+                    ok = bridge_manager.upload(sketch_file, log_file=log_file)
+                    if ok:
+                        msg = "🚀 **Upload complete.**"
+                        if log_file:
+                            msg += f" Log: `{os.path.abspath(log_file)}`"
+                        display(Markdown(msg))
+                except Exception as e:
+                    display(Markdown(f"**Error during upload:** `{e}`"))
                 return
 
             if cmd == "ports":
-                ports = list_serial_ports()
-                if ports:
-                    display(Markdown("**Available serial ports:**  \n" + "\n".join(f"- `{p}`" for p in ports)))
-                else:
-                    display(Markdown("**No serial port found.**"))
+                try:
+                    ports = list_serial_ports()
+                    if ports:
+                        display(Markdown("**Available serial ports:**  \n" + "\n".join(f"- `{p}`" for p in ports)))
+                    else:
+                        display(Markdown("**No serial port found.**"))
+                except Exception as e:
+                    display(Markdown(f"**Error listing ports:** `{e}`"))
                 return
 
             display(Markdown(f"**Unknown command:** `{cmd}`\n\n" + _help()))
@@ -215,6 +273,11 @@ class BoardMagic(Magics):
         except Exception as e:
             display(Markdown(f"**Error:** `{e}`"))
 
-
 def load_ipython_extension(ipython):
+    """
+    Registers the BoardMagic class as an IPython extension.
+
+    Args:
+        ipython: The IPython interactive shell instance.
+    """
     ipython.register_magics(BoardMagic)

@@ -12,7 +12,12 @@ from arduino_colab_kernel.code.code_manager import ALLOWED_SECTIONS
 
 
 def _help() -> str:
-    # Returns Markdown help as text (caller decides on display)
+    """
+    Returns Markdown help text for the %%code magic command.
+
+    Returns:
+        str: Markdown-formatted help text.
+    """
     return """
 ### 🧩 Available `%%code` commands
 
@@ -45,14 +50,37 @@ digitalWrite(led, LOW);  delay(500);
 %%code functions
 int readSensor() { return analogRead(A0); }
 """
-
 @magics_class
 class CodeMagics(Magics):
+    """
+    Implements the %%code cell magic for saving code into Arduino code sections.
+
+    Methods:
+        code(line, cell): Handles the %%code magic cell.
+    """
+
     @cell_magic
     def code(self, line, cell):
+        """
+        Handles the %%code magic cell.
+
+        Args:
+            line (str): The command line after %%code (section and optional cell_id).
+            cell (str): The code content of the cell.
+
+        Returns:
+            None
+
+        Raises:
+            Does not raise; all exceptions are caught and displayed as Markdown.
+        """
         # --- Argument parsing (safely via shlex) ---
-        parts = shlex.split(line.strip()) if line else []
-        section = parts[0].lower() if parts else None
+        try:
+            parts = shlex.split(line.strip()) if line else []
+            section = parts[0].lower() if parts else None
+        except Exception as e:
+            display(Markdown(f"**Error parsing arguments:** `{e}`"))
+            return
 
         # --- Help / empty input ---
         if section in (None, "help", "?"):
@@ -73,4 +101,13 @@ class CodeMagics(Magics):
             display(Markdown(f"**Unknown code section or command:** `{section}`\n\n" + _help()))
 
 def load_ipython_extension(ipython):
+    """
+    Registers the CodeMagics class as an IPython extension.
+
+    Args:
+        ipython: The IPython interactive shell instance.
+
+    Returns:
+        None
+    """
     ipython.register_magics(CodeMagics)

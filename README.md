@@ -26,7 +26,7 @@ cd ArduinoColab/colab
 pip install -e .
 ```
 
-> ⚠️ Requirement: [Arduino CLI](https://arduino.github.io/arduino-cli/latest/) must be installed, or use the binary provided in the package (`tools/arduino-cli.exe`).
+> ⚠️ Requirement: [Arduino CLI](https://arduino.github.io/arduino-cli/latest/) or [Arduino IDE](https://www.arduino.cc/en/software/) must be installed, or use the binary provided in the package (`tools/arduino-cli.exe` or `arduino-cli` package).
 
 ### Initialize a project
 
@@ -134,5 +134,10 @@ The project consists of four main managers/components, each controlled by its ow
 - **Serial Port** (`%serial`) – provides serial input/output
 ---
 
+## ✅ Supported OS
+- **Windows 10 (64-bit) and newer version**
+- **Linux-based OS**
+
 ## 📄 License
 MIT (see `LICENSE`).  
+See also [Arduino CLI Project `LICENSE`](https://github.com/arduino/arduino-cli/blob/master/LICENSE.txt)

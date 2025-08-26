@@ -24,11 +24,25 @@ except Exception:
 
 
 def _is_windows() -> bool:
+    """
+    Checks if the current operating system is Windows.
+
+    Returns:
+        bool: True if running on Windows, False otherwise.
+    """
     return os.name == "nt"
 
 
 def _ensure_executable(path: Path) -> None:
-    """On POSIX, sets the executable bit if missing."""
+    """
+    On POSIX systems, sets the executable bit for the user if missing.
+
+    Args:
+        path (Path): Path to the file to make executable.
+
+    Raises:
+        Exception: If chmod fails (but is suppressed).
+    """
     if _is_windows():
         return
     try:
@@ -40,7 +54,19 @@ def _ensure_executable(path: Path) -> None:
 
 
 def _copy_to_temp(resource_path: Path, target_name: str | None = None) -> Path:
-    """Copies the resource to a temp directory and returns its Path (persistent for the session)."""
+    """
+    Copies the resource to a temp directory and returns its Path (persistent for the session).
+
+    Args:
+        resource_path (Path): Path to the resource file.
+        target_name (str|None): Optional new name for the copied file.
+
+    Returns:
+        Path: Path to the copied file in the temp directory.
+
+    Raises:
+        Exception: If copying fails.
+    """
     temp_dir = Path(tempfile.gettempdir()) / "arduino_colab_kernel"
     temp_dir.mkdir(parents=True, exist_ok=True)
     dst = temp_dir / (target_name or resource_path.name)
@@ -49,7 +75,10 @@ def _copy_to_temp(resource_path: Path, target_name: str | None = None) -> Path:
         shutil.copy2(str(resource_path), str(dst))
     except Exception:
         # fallback without metadata
-        shutil.copy(str(resource_path), str(dst))
+        try:
+            shutil.copy(str(resource_path), str(dst))
+        except Exception as e:
+            raise RuntimeError(f"Failed to copy resource to temp: {e}")
     _ensure_executable(dst)
     return dst
 
@@ -62,7 +91,15 @@ def resolve_arduino_cli_path(explicit_path: str | None = None) -> str:
     3) resource in the package (arduino_colab_kernel.tools)
        - if it's directly on the FS, returns that
        - if it's in a zip, extracts to temp and returns the new path
-    If nothing is found, raises FileNotFoundError.
+
+    Args:
+        explicit_path (str|None): Explicit path to arduino-cli, or None.
+
+    Returns:
+        str: Path to the arduino-cli executable.
+
+    Raises:
+        FileNotFoundError: If arduino-cli cannot be found by any method.
     """
     # 1) explicit / env
     candidate = explicit_path or os.environ.get("ARDUINO_CLI")
@@ -92,7 +129,7 @@ def resolve_arduino_cli_path(explicit_path: str | None = None) -> str:
                 # otherwise manually copy to temp (theoretically as_file already handles this)
                 extracted = _copy_to_temp(real_path, exe_name)
                 return str(extracted)
-        except Exception:
+        except Exception as e:
             # last attempt: if files() fails, nothing is found
             pass
 

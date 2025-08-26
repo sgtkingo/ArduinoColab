@@ -7,7 +7,12 @@ from IPython.display import Markdown, display
 from arduino_colab_kernel.bridge.bridge import bridge_manager  # Use bridge_manager instead of direct board access
 
 def _help() -> str:
-    """Returns help for %%serial."""
+    """
+    Returns help text for the %%serial magic command.
+
+    Returns:
+        str: Markdown-formatted help text.
+    """
     return (
         "**Usage:** `%%serial [listen|read|write|help] [options]`\n\n"
         "**Commands:**\n"
@@ -28,7 +33,15 @@ def _help() -> str:
     )
 
 def _parse_serial_args(line: str):
-    """Parses arguments for listen/read/write."""
+    """
+    Parses arguments for listen/read/write commands.
+
+    Args:
+        line (str): The command line after %%serial.
+
+    Returns:
+        tuple: (cmd, opts) where cmd is the command string and opts is a dictionary of options.
+    """
     args = shlex.split(line)
     if not args:
         return "", {}
@@ -61,10 +74,28 @@ def _parse_serial_args(line: str):
 
 @magics_class
 class SerialMagic(Magics):
+    """
+    Implements the %%serial magic command for serial port communication.
+
+    Methods:
+        serial(line, cell=None): Handles the %%serial magic command.
+    """
 
     @line_magic
     def serial(self, line, cell=None):
-        """Magic cell %%serial for working with the serial port."""
+        """
+        Handles the %%serial magic command.
+
+        Args:
+            line (str): The command line input after %%serial.
+            cell (str|None): The cell content (used for write).
+
+        Returns:
+            None
+
+        Raises:
+            Does not raise; all exceptions are caught and displayed as Markdown.
+        """
         cmd, opts = _parse_serial_args(line)
 
         if cmd == "help" or cmd == "":
@@ -86,18 +117,27 @@ class SerialMagic(Magics):
                     + (f", duration: {duration}s" if duration else ", duration: unlimited")
                     + (f", filter prefix: `{prefix}`" if prefix else "")
                 ))
-                bridge_manager.serial_listen(duration=duration, prefix=prefix)
+                try:
+                    bridge_manager.serial_listen(duration=duration, prefix=prefix)
+                except Exception as e:
+                    display(Markdown(f"**Error during listening:** `{e}`"))
                 display(Markdown("✅ **Listening ended.**"))
 
             elif cmd == "read":
                 lines = max(1, opts["lines"])
-                for ln in bridge_manager.serial_read(lines=lines):
-                    print(ln)
+                try:
+                    for ln in bridge_manager.serial_read(lines=lines):
+                        print(ln)
+                except Exception as e:
+                    display(Markdown(f"**Error during read:** `{e}`"))
 
             elif cmd == "write":
                 payload = opts["data"] if opts["data"] is not None else (cell or "")
-                bridge_manager.serial_write(payload, append_newline=not opts["no_nl"])
-                display(Markdown(f"✉️ **Sent:** `{payload.strip()}`"))
+                try:
+                    bridge_manager.serial_write(payload, append_newline=not opts["no_nl"])
+                    display(Markdown(f"✉️ **Sent:** `{payload.strip()}`"))
+                except Exception as e:
+                    display(Markdown(f"**Error during write:** `{e}`"))
 
         except Exception as e:
             display(Markdown(f"**Error:** `{e}`"))
@@ -109,4 +149,13 @@ class SerialMagic(Magics):
 
 
 def load_ipython_extension(ipython):
+    """
+    Registers the SerialMagic class as an IPython extension.
+
+    Args:
+        ipython: The IPython interactive shell instance.
+
+    Returns:
+        None
+    """
     ipython.register_magics(SerialMagic)

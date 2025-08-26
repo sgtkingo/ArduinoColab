@@ -17,11 +17,26 @@ except Exception as e:
 
 # ---------- Port autodetection ----------
 def list_serial_ports() -> list[str]:
-    """Returns a list of available serial ports (e.g. COM3, /dev/ttyUSB0)."""
+    """
+    Returns a list of available serial ports (e.g. COM3, /dev/ttyUSB0).
+
+    Returns:
+        list[str]: List of serial port device names.
+    """
     return [p.device for p in list_ports.comports()]
 
 class SerialPort:
-    """Encapsulation of a serial port – configuration + I/O operations."""
+    """
+    Encapsulation of a serial port – configuration + I/O operations.
+
+    Attributes:
+        port (Optional[str]): Serial port device name.
+        baudrate (int): Baud rate for communication.
+        timeout (float): Read/write timeout in seconds.
+        encoding (str): Encoding for text I/O.
+        autostrip (bool): Whether to strip line endings on read.
+        _ser (Optional[serial.Serial]): Internal pyserial handle.
+    """
 
     def __init__(
         self,
@@ -31,7 +46,19 @@ class SerialPort:
         encoding: str = "utf-8",
         autostrip: bool = True,
     ):
-        # Port configuration
+        """
+        Initializes the SerialPort with configuration.
+
+        Args:
+            port (Optional[str]): Serial port device name.
+            baudrate (int): Baud rate for communication.
+            timeout (float): Read/write timeout in seconds.
+            encoding (str): Encoding for text I/O.
+            autostrip (bool): Whether to strip line endings on read.
+
+        Raises:
+            RuntimeError: If no port is available.
+        """
         if not port:
             port = SerialPort.suggest_port()
         self.port = port                  # e.g. "COM5" or "/dev/ttyUSB0"
@@ -53,7 +80,16 @@ class SerialPort:
         encoding: Optional[str] = None,
         autostrip: Optional[bool] = None,
     ) -> None:
-        """Updates serial port configuration (without opening)."""
+        """
+        Updates serial port configuration (without opening).
+
+        Args:
+            port (Optional[str]): Serial port device name.
+            baudrate (Optional[int]): Baud rate.
+            timeout (Optional[float]): Timeout in seconds.
+            encoding (Optional[str]): Encoding for text I/O.
+            autostrip (Optional[bool]): Whether to strip line endings on read.
+        """
         if port is not None:
             self.port = port
         if baudrate is not None:
@@ -68,33 +104,59 @@ class SerialPort:
     # ---------- Lifecycle ----------
 
     def open(self) -> None:
-        """Opens the serial port according to the current configuration."""
+        """
+        Opens the serial port according to the current configuration.
+
+        Raises:
+            RuntimeError: If port is not set or opening fails.
+        """
         if not self.port:
             raise RuntimeError("Port is not set. Use SerialPort.configure(port='COMx').")
         if self._ser and self._ser.is_open:
             return
-        self._ser = serial.Serial(
-            self.port,
-            self.baudrate,
-            timeout=self.timeout,
-            write_timeout=self.timeout,
-        )
+        try:
+            self._ser = serial.Serial(
+                self.port,
+                self.baudrate,
+                timeout=self.timeout,
+                write_timeout=self.timeout,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to open serial port '{self.port}': {e}")
 
     def close(self) -> None:
-        """Safely closes the serial port."""
+        """
+        Safely closes the serial port.
+
+        Raises:
+            Exception: If closing the port fails.
+        """
         try:
             if self._ser and self._ser.is_open:
                 self._ser.close()
+        except Exception as e:
+            raise RuntimeError(f"Failed to close serial port: {e}")
         finally:
             self._ser = None
 
     # ---------- I/O ----------
 
     def readline(self) -> Optional[str]:
-        """Reads one line (non-blocking according to timeout)."""
+        """
+        Reads one line (non-blocking according to timeout).
+
+        Returns:
+            Optional[str]: The line read, or None if nothing is read.
+
+        Raises:
+            Exception: If reading from serial fails.
+        """
         if not self._ser or not self._ser.is_open:
             return None
-        raw = self._ser.readline()
+        try:
+            raw = self._ser.readline()
+        except Exception as e:
+            raise RuntimeError(f"Failed to read line from serial port: {e}")
         if not raw:
             return None
         try:
@@ -104,7 +166,18 @@ class SerialPort:
         return txt.rstrip("\r\n") if self.autostrip else txt
 
     def read(self, lines: int = 1) -> list[str]:
-        """Reads N lines (non-blocking loop – waits within timeouts)."""
+        """
+        Reads N lines (non-blocking loop – waits within timeouts).
+
+        Args:
+            lines (int): Number of lines to read.
+
+        Returns:
+            list[str]: List of lines read.
+
+        Raises:
+            Exception: If reading from serial fails.
+        """
         if lines < 1:
             lines = 1
         out: list[str] = []
@@ -117,11 +190,23 @@ class SerialPort:
         return out
 
     def write(self, data: str, append_newline: bool = True) -> None:
-        """Writes data to the port (optionally with trailing newline)."""
+        """
+        Writes data to the port (optionally with trailing newline).
+
+        Args:
+            data (str): Data to write.
+            append_newline (bool): Whether to append a newline.
+
+        Raises:
+            RuntimeError: If serial port is not open or writing fails.
+        """
         if not self._ser or not self._ser.is_open:
             raise RuntimeError("Serial port is not open. Call open() first.")
-        payload = (data + ("\n" if append_newline else "")).encode(self.encoding, errors="ignore")
-        self._ser.write(payload)
+        try:
+            payload = (data + ("\n" if append_newline else "")).encode(self.encoding, errors="ignore")
+            self._ser.write(payload)
+        except Exception as e:
+            raise RuntimeError(f"Failed to write to serial port: {e}")
 
     def listen(
         self,
@@ -129,7 +214,17 @@ class SerialPort:
         prefix: Optional[str] = None,
         printer: Callable[[str], None] = print,
     ) -> None:
-        """Streams lines for `duration` seconds (None = until Ctrl+C). Optionally filters by prefix."""
+        """
+        Streams lines for `duration` seconds (None = until Ctrl+C). Optionally filters by prefix.
+
+        Args:
+            duration (Optional[float]): Duration in seconds to listen, or None for unlimited.
+            prefix (Optional[str]): Only print lines starting with this prefix.
+            printer (Callable[[str], None]): Function to call for each line.
+
+        Raises:
+            Exception: If reading from serial fails.
+        """
         start = time.time()
         try:
             while True:
@@ -143,12 +238,19 @@ class SerialPort:
                 printer(line)
         except KeyboardInterrupt:
             pass
+        except Exception as e:
+            raise RuntimeError(f"Error during serial listen: {e}")
 
     # ---------- Utility ----------
 
     @staticmethod
     def suggest_port() -> Optional[str]:
-        """Heuristically selects a suitable port (if available)."""
+        """
+        Heuristically selects a suitable port (if available).
+
+        Returns:
+            Optional[str]: Device name of a suitable port, or None if none found.
+        """
         ports = list(list_ports.comports())
         if not ports:
             return None

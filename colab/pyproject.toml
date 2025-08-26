@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arduino-colab-kernel"
-version = "0.1.2"
+version = "0.1.3"
 description = "Jupyter magics for Arduino/ESP32"
 readme = "README.md"
 requires-python = ">=3.10"
