@@ -119,18 +119,7 @@ class BoardManager:
         if not b:
             return {}
         
-        return {
-            "name": b.name,
-            "fqbn": b.fqbn,
-            "port": b.port,
-            "serial":
-                    {
-                        "baudrate": b.serial.baudrate,
-                        "timeout": b.serial.timeout,
-                        "encoding": b.serial.encoding,
-                        "autostrip": b.serial.autostrip  
-                    }
-        } 
+        return b.export()
 
 # Singleton for magics
 board_manager = BoardManager()

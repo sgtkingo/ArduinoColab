@@ -5,6 +5,7 @@ import shlex
 from IPython.core.magic import Magics, magics_class, line_magic
 from IPython.display import Markdown, display
 from arduino_colab_kernel.bridge.bridge import bridge_manager  # Use bridge_manager instead of direct board access
+from arduino_colab_kernel.board.board_manager import board_manager
 
 def _help() -> str:
     """
@@ -107,7 +108,8 @@ class SerialMagic(Magics):
             return
 
         try:
-            bridge_manager.open_serial()
+            b = board_manager.require_board()
+            bridge_manager.open_serial(b)
 
             if cmd == "listen":
                 duration = opts["duration"]
@@ -118,7 +120,8 @@ class SerialMagic(Magics):
                     + (f", filter prefix: `{prefix}`" if prefix else "")
                 ))
                 try:
-                    bridge_manager.serial_listen(duration=duration, prefix=prefix)
+                    b = board_manager.require_board()
+                    bridge_manager.listen_serial(b, duration=duration, prefix=prefix)
                 except Exception as e:
                     display(Markdown(f"**Error during listening:** `{e}`"))
                 display(Markdown("✅ **Listening ended.**"))
@@ -126,7 +129,7 @@ class SerialMagic(Magics):
             elif cmd == "read":
                 lines = max(1, opts["lines"])
                 try:
-                    for ln in bridge_manager.serial_read(lines=lines):
+                    for ln in bridge_manager.readlines_serial(b, size=lines):
                         print(ln)
                 except Exception as e:
                     display(Markdown(f"**Error during read:** `{e}`"))
@@ -134,7 +137,7 @@ class SerialMagic(Magics):
             elif cmd == "write":
                 payload = opts["data"] if opts["data"] is not None else (cell or "")
                 try:
-                    bridge_manager.serial_write(payload, append_newline=not opts["no_nl"])
+                    bridge_manager.write_serial(b, payload, append_newline=not opts["no_nl"])
                     display(Markdown(f"✉️ **Sent:** `{payload.strip()}`"))
                 except Exception as e:
                     display(Markdown(f"**Error during write:** `{e}`"))
@@ -143,7 +146,8 @@ class SerialMagic(Magics):
             display(Markdown(f"**Error:** `{e}`"))
         finally:
             try:
-                bridge_manager.close_serial()
+                b = board_manager.require_board()
+                bridge_manager.close_serial(b)
             except Exception:
                 pass
 

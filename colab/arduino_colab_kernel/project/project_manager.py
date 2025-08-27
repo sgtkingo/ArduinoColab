@@ -1,21 +1,20 @@
 # project_manager.py
 # Project management, generation and saving to .ino files
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 import os
 import json
 
 from arduino_colab_kernel.board.board_manager import board_manager  # global instance BoardManager
 from arduino_colab_kernel.code.code_manager import code_manager  # global instance ArduinoCodeManager
 from arduino_colab_kernel.bridge.bridge import bridge_manager  # global instance Bridge
+from arduino_colab_kernel.bridge.bridge import LOCAL_MODE, REMOTE_MODE
+
 from arduino_colab_kernel.code.ino_generator import InoGenerator
 
 DEFAULT_PROJECT_NAME = "sketch"
 DEFAULT_PROJECTS_DIR = "./projects"
 DEFAULT_LOGS_DIR = "logs"
-
-LOCAL_MODE = "local"  # local mode (default)
-REMOTE_MODE = "remote"  # remote mode (e.g. for cloud IDEs)
 
 class ArduinoProjectManager:
     """
@@ -35,7 +34,7 @@ class ArduinoProjectManager:
         self.project_name = ""
         self.project_dir = ""
         self.logs_dir = ""
-        self.project_mode = LOCAL_MODE
+        self.project_mode = ""
         self.ino_generator:InoGenerator = InoGenerator(prepare_dirs=False)
         
     def project_exists(self, project_name: str, project_dir: str = DEFAULT_PROJECTS_DIR) -> bool:
@@ -52,7 +51,7 @@ class ArduinoProjectManager:
         project_dir = os.path.join(project_dir, project_name)
         return os.path.exists(project_dir) and os.path.isdir(project_dir)
     
-    def init_project(self, project_name: str = DEFAULT_PROJECT_NAME, projects_dir: str = DEFAULT_PROJECTS_DIR, project_mode: str = LOCAL_MODE):
+    def init_project(self, project_name: str = DEFAULT_PROJECT_NAME, projects_dir: str = DEFAULT_PROJECTS_DIR, project_mode: str = LOCAL_MODE, remote_url: Optional[str] = None, token: Optional[str] = None):
         """
         Initializes a new project with the given name, directory, and mode.
 
@@ -66,10 +65,10 @@ class ArduinoProjectManager:
             Exception: If directory or file operations fail.
         """
         self.project_name = project_name.strip()
-        self.project_mode = project_mode.strip().lower()
-        if self.project_mode not in (LOCAL_MODE, REMOTE_MODE):
-            raise ValueError(f"Invalid project mode '{self.project_mode}'. Use '{LOCAL_MODE}' or '{REMOTE_MODE}'.")
-        bridge_manager.set_mode(self.project_mode)
+        # Set bridge mode
+        bridge_manager.set_mode(project_mode, base_url=remote_url, token=token)
+        self.project_mode = bridge_manager.mode
+        
         self._set_project_dir(projects_dir)
         projects_dir_abs = self.get_project_dir(as_abs=True)
         self.ino_generator = InoGenerator(self.project_name, projects_dir_abs)
@@ -77,11 +76,11 @@ class ArduinoProjectManager:
         code_manager.default()  # Re-initialize code manager
         self.save()  # Save project
     
-    def load_project(self, project_name: str = DEFAULT_PROJECT_NAME, projects_dir: str = DEFAULT_PROJECTS_DIR, project_mode: str = LOCAL_MODE):
+    def load_project(self, project_name: str = DEFAULT_PROJECT_NAME, projects_dir: str = DEFAULT_PROJECTS_DIR, project_mode: str = LOCAL_MODE, remote_url: Optional[str] = None, token: Optional[str] = None):
         """
         Loads an existing project, which will be used for file saving.
 
-        Args:
+        Args:7
             project_name (str): Name of the project (used for folder and file).
             projects_dir (str): Path to the directory where projects are stored.
             project_mode (str): Mode for the project ("local" or "remote").
@@ -92,10 +91,12 @@ class ArduinoProjectManager:
             Exception: If file operations fail.
         """
         self.project_name = project_name.strip()
-        self.project_mode = project_mode.strip().lower()
-        if self.project_mode not in (LOCAL_MODE, REMOTE_MODE):
-            raise ValueError(f"Invalid project mode '{self.project_mode}'. Use '{LOCAL_MODE}' or '{REMOTE_MODE}'.")
-        bridge_manager.set_mode(self.project_mode)
+
+        # Set bridge mode
+        # Set bridge mode
+        bridge_manager.set_mode(project_mode, base_url=remote_url, token=token)
+        self.project_mode = bridge_manager.mode
+        
         self._set_project_dir(projects_dir)
         projects_dir_abs = self.get_project_dir(as_abs=True)
         self.ino_generator = InoGenerator(self.project_name, projects_dir_abs)
@@ -210,7 +211,7 @@ class ArduinoProjectManager:
             "code": code_manager.export_as_json()
         }
     
-    def save(self) -> str:
+    def save(self, get_sketch:bool=False) -> str:
         """
         Saves the current code to a .ino file in the target directory and exports project JSON.
 
@@ -231,7 +232,7 @@ class ArduinoProjectManager:
                 json.dump(project_json, f, indent=4, ensure_ascii=False)
         except Exception as e:
             raise RuntimeError(f"Failed to save project: {e}")
-        return self.get_project_dir(as_abs=True)       
+        return self.ino_generator.get_path() if get_sketch else self.get_project_dir(as_abs=True)       
     
     def _set_project_dir(self, projects_dir: str):
         """

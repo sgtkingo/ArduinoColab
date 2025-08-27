@@ -4,14 +4,14 @@
 #  - "local"  – uses arduino-cli and local pyserial (Board.serial)
 #  - "remote" – placeholders for future HTTP/WS client (not implemented)
 from __future__ import annotations
-from typing import Optional, Iterable
-import os
-import shutil
-import subprocess
-from pathlib import Path
+from typing import Optional, Iterable, Dict, Any, Union, List, Callable
+import os, time
 
-from arduino_colab_kernel.utils.utils_cli import resolve_arduino_cli_path
-from arduino_colab_kernel.board.board_manager import board_manager  # global instance BoardManager
+from arduino_colab_kernel.backends.protocol import Backend
+from arduino_colab_kernel.backends.local_backend import LocalBackend
+from arduino_colab_kernel.backends.remote_backend import RemoteBackend
+
+from arduino_colab_kernel.board.board import Board
 
 # Local path to arduino-cli (can be in PATH or in the package)
 ARDUINO_CLI_PATH = os.path.abspath(
@@ -21,16 +21,16 @@ ARDUINO_CLI_PATH = os.path.abspath(
 LOCAL_MODE = "local"  # local mode (default)
 REMOTE_MODE = "remote"  # remote mode (e.g. for cloud IDEs)
 
+BASE_URL = "http://localhost:5000"  # default remote server URL (for REMOTE_MODE)
+
 class Bridge:
     """
     Performs operations on a specific board (Board), locally or remotely.
 
     Attributes:
         mode (str): Operation mode ("local" or "remote").
-        _cli_path (Optional[str]): Optional fixed path to arduino-cli.
     """
-
-    def __init__(self, mode: str = LOCAL_MODE):
+    def __init__(self, mode: str = LOCAL_MODE, base_url: Optional[str] = BASE_URL, token: Optional[str] = None, explicit_printer: Optional[Callable[[str], None]] = None):
         """
         Initializes the Bridge.
 
@@ -40,11 +40,16 @@ class Bridge:
         Raises:
             ValueError: If mode is not valid.
         """
-        self.mode = mode.lower().strip()
-        self._cli_path: Optional[str] = None
-
+        try:
+            self.set_mode(mode, base_url=base_url, token=token)
+        except ValueError as e:
+            raise ValueError(f"Failed to initialize Bridge: {e}")
+        
+        self._printer:Callable[[str]] = explicit_printer if explicit_printer else print
+            
+        
     # ---------- Wiring / configuration ----------
-    def set_mode(self, mode: str) -> None:
+    def set_mode(self, mode: str, base_url: Optional[str] = BASE_URL, token: Optional[str] = None) -> None:
         """
         Sets the work mode (local/remote).
 
@@ -58,226 +63,98 @@ class Bridge:
         if mode not in (LOCAL_MODE, REMOTE_MODE):
             raise ValueError(f"Invalid mode '{mode}'. Use '{LOCAL_MODE}' or '{REMOTE_MODE}'.")
         self.mode = mode
-
-    def set_cli_path(self, cli_path: Optional[str]) -> None:
-        """
-        Optionally set a fixed path to arduino-cli (overrides autodetection).
-
-        Args:
-            cli_path (Optional[str]): Path to arduino-cli executable.
-        """
-        self._cli_path = cli_path
-
-    # ---------- Compile / Upload ----------
-    def compile(self, sketch_path: str, log_file: Optional[str] = None) -> bool:
-        """
-        Compiles the sketch in the given directory for the current board.
-
-        Args:
-            sketch_path (str): Path to the folder with the .ino file.
-            log_file (Optional[str]): Path to log file.
-
-        Returns:
-            bool: True if compilation is successful.
-
-        Raises:
-            RuntimeError: If no serial port is set, or compilation fails.
-            Exception: If subprocess or file operations fail.
-        """
-        if self.mode == REMOTE_MODE:
-            return self._remote_compile(sketch_path, log_file)
         
-        b = board_manager.require_board()
-        if b.port is None:
-            raise RuntimeError("No serial port is set for the board. Use `%board serial` to set it.")
+        if self.mode == LOCAL_MODE:
+            self._be: Backend = LocalBackend(arduino_cli=ARDUINO_CLI_PATH)
+        else:  # REMOTE_MODE
+            if not base_url or not token:
+                raise ValueError("base_url and token must be provided for remote mode.")
+            self._be: Backend = RemoteBackend(base_url=base_url, token=token)
+
+    def compile(self, board: Board, sketch_source: str,
+                extra_args: Optional[Iterable[str]] = None, log_file:Optional[Iterable[str]] = None) -> bool:
+        if os.path.isfile(sketch_source):
+            with open(sketch_source, "r", encoding="utf-8") as f:
+                code_source = f.read()
+        else:
+            code_source = sketch_source
+        self._printer(f"💻 **Compiling for {board.name} on port {board.port or 'N/A'}...**")
+        self._printer("⏳ This may take a while, please wait...")
         
-        cli = self._resolve_cli()
-        sketch_dir = os.path.abspath(sketch_path)
-        cmd = [
-            cli, "compile",
-            sketch_dir,
-            "-p", b.port,
-            "-b", b.fqbn,
-        ]
-        print(f"Compiling: {' '.join(cmd)}")  # Debug output
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
-        except Exception as e:
-            raise RuntimeError(f"Failed to run compile command: {e}")
-        ok = (result.returncode == 0)
-        if not ok:
-            print(result.stdout)
-            print(result.stderr)
-            raise RuntimeError(f"Compile failed: {result.stderr}")
-        print(result.stdout)
-        
-        if log_file:
-            self._append_log(log_file, cmd, result.stdout, result.stderr, ok)
-            
+        res = self._be.compile(board, code_source, extra_args)
+        ok = res.get("status", False)
+        if ok:
+            self._printer(res.get("stdout", ""))
+            self._printer("✅ **Compile complete.**")
+        else:
+            self._printer(res.get("stderr", ""))
+            self._printer("❌ **Compile failed.**")
+        if log_file and isinstance(log_file, str):
+            self._append_log(log_file, res.get("cmd", []), res.get("stdout", ""), res.get("stderr", ""), res.get("ok", False))
         return ok
 
-    def upload(self, sketch_path: str, log_file: Optional[str] = None) -> bool:
-        """
-        Uploads the sketch to the selected board via the set port (e.g. 'COM3' or '/dev/ttyUSB0').
-
-        Args:
-            sketch_path (str): Path to the folder with the .ino file.
-            log_file (Optional[str]): Path to log file.
-
-        Returns:
-            bool: True if upload is successful.
-
-        Raises:
-            RuntimeError: If no serial port is set, or upload fails.
-            Exception: If subprocess or file operations fail.
-        """
-        if self.mode == REMOTE_MODE:
-            return self._remote_upload(sketch_path, log_file)
+    def upload(self, board: Board, sketch_source: str,
+               extra_args: Optional[Iterable[str]] = None, log_file:Optional[Iterable[str]] = None) -> bool:
         
-        # First compile to ensure the code is valid
-        if not self.compile(sketch_path):
-            raise RuntimeError("The code was not successfully compiled, upload failed.")
-        
-        b = board_manager.require_board()
-        if b.port is None:
-            raise RuntimeError("No serial port is set for the board. Use `%board serial` to set it.")
-        
-        cli = self._resolve_cli()
-        sketch_dir = os.path.abspath(sketch_path)
-        cmd = [
-            cli, "upload",
-            sketch_dir,
-            "-p", b.port,
-            "-b", b.fqbn,
-        ]
-        print(f"Uploading: {' '.join(cmd)}")  # Debug output
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
-        except Exception as e:
-            raise RuntimeError(f"Failed to run upload command: {e}")
-        ok = (result.returncode == 0)
-        if not ok:
-            print(result.stdout)
-            print(result.stderr)
-            raise RuntimeError(f"Upload failed: {result.stderr}")
-        print(result.stdout)
-        
-        if log_file:
-            self._append_log(log_file, cmd, result.stdout, result.stderr, ok)
+        if os.path.isfile(sketch_source):
+            with open(sketch_source, "r", encoding="utf-8") as f:
+                code_source = f.read()
+        else:
+            code_source = sketch_source
+        self._printer(f"📡 **Uploading to {board.name} on port {board.port or 'N/A'}...**")
+        self._printer("⏳ This may take a while, please wait...")
+        # First compile, then upload if successful
+        if not self.compile(board, code_source, log_file=log_file, extra_args=extra_args):
+            self._printer("❌ **Compilation failed, upload aborted.**")
+            return False
             
+        res = self._be.upload(board, code_source, extra_args)
+        ok = res.get("status", False)
+        if ok:
+            self._printer(res.get("stdout", ""))
+            self._printer("✅ **Upload complete.**")
+        else:
+            self._printer(res.get("stderr", ""))
+            self._printer("❌ **Upload failed.**")
+        if log_file and isinstance(log_file, str):
+            self._append_log(log_file, res.get("cmd", []), res.get("stdout", ""), res.get("stderr", ""), res.get("ok", False))
+        
         return ok
 
-    # ---------- Serial I/O (delegates to Board.serial in LOCAL mode) ----------
+    def open_serial(self, board: Board) -> None:
+        self._be.open_serial(board)
 
-    def open_serial(self) -> None:
-        """
-        Opens the serial port according to Board.serial configuration.
+    def close_serial(self, board: Board) -> None:
+        self._be.close_serial(board)
+        
+    def read_serial(self, board: Board, size: int = 1024) -> bytes:
+        return self._be.read_serial(board, size)
 
-        Raises:
-            RuntimeError: If board or serial port is not available.
-            Exception: If serial open fails.
-        """
-        b = board_manager.require_board()
-        if self.mode == "remote":
-            return self._remote_serial_open()
-        if not b.serial:
-            raise RuntimeError("Board does not have an attached SerialPort.")
+    def readlines_serial(self, board: Board, size: int = 1) -> List[str]:
+        return self._be.readlines_serial(board, size)
+
+    def write_serial(self, board: Board, data: Union[bytes, str], append_newline: bool = True) -> int:
+        return self._be.write_serial(board, data, append_newline)
+    
+    def listen_serial(self, board: Board, duration: Optional[int] = None,
+                    prefix: Optional[str] = None) -> None:
+        start = time.time()
         try:
-            b.serial.open()
+            while True:
+                if duration is not None and (time.time() - start) >= duration:
+                    break
+                line = self.readlines_serial(board, size=1)
+                line = line[0] if line else None
+                if line is None:
+                    continue
+                if prefix is not None and not line.startswith(prefix):
+                    continue
+                self._printer(line)
+        except KeyboardInterrupt:
+            pass
         except Exception as e:
-            raise RuntimeError(f"Failed to open serial port: {e}")
-
-    def close_serial(self) -> None:
-        """
-        Closes the serial port.
-
-        Raises:
-            Exception: If serial close fails.
-        """
-        b = board_manager.require_board()
-        if self.mode == "remote":
-            return self._remote_serial_close()
-        if b.serial:
-            try:
-                b.serial.close()
-            except Exception as e:
-                raise RuntimeError(f"Failed to close serial port: {e}")
-
-    def serial_listen(self, duration: Optional[float] = None, prefix: Optional[str] = None) -> None:
-        """
-        Streams serial output (LOCAL: delegates to Board.serial.listen).
-
-        Args:
-            duration (Optional[float]): Listening duration in seconds.
-            prefix (Optional[str]): Only lines starting with this prefix are printed.
-
-        Raises:
-            Exception: If serial listen fails.
-        """
-        b = board_manager.require_board()
-        if self.mode == "remote":
-            return self._remote_serial_listen(duration, prefix)
-        try:
-            b.serial.listen(duration=duration, prefix=prefix, printer=print)
-        except Exception as e:
-            raise RuntimeError(f"Failed during serial listen: {e}")
-
-    def serial_read(self, lines: int = 1) -> list[str]:
-        """
-        Reads N lines (LOCAL: delegates to Board.serial.read).
-
-        Args:
-            lines (int): Number of lines to read.
-
-        Returns:
-            list[str]: List of lines read from serial.
-
-        Raises:
-            Exception: If serial read fails.
-        """
-        b = board_manager.require_board()
-        if self.mode == "remote":
-            return self._remote_serial_read(lines)
-        try:
-            return b.serial.read(lines=lines)
-        except Exception as e:
-            raise RuntimeError(f"Failed during serial read: {e}")
-
-    def serial_write(self, data: str, append_newline: bool = True) -> None:
-        """
-        Writes data (LOCAL: delegates to Board.serial.write).
-
-        Args:
-            data (str): Data to write to serial.
-            append_newline (bool): Whether to append a newline.
-
-        Raises:
-            Exception: If serial write fails.
-        """
-        b = board_manager.require_board()
-        if self.mode == "remote":
-            return self._remote_serial_write(data, append_newline)
-        try:
-            b.serial.write(data, append_newline=append_newline)
-        except Exception as e:
-            raise RuntimeError(f"Failed during serial write: {e}")
-
-    # ---------- Internal helpers ----------
-
-    def _resolve_cli(self) -> str:
-        """
-        Finds the path to arduino-cli – prefers explicit, then resolver/utils, finally PATH.
-
-        Returns:
-            str: Path to arduino-cli executable.
-
-        Raises:
-            FileNotFoundError: If arduino-cli cannot be found.
-        """
-        if self._cli_path and Path(self._cli_path).exists():
-            return self._cli_path
-        return resolve_arduino_cli_path(ARDUINO_CLI_PATH)
-
+            raise RuntimeError(f"Error during serial listen: {e}")
+    
     @staticmethod
     def _append_log(log_file: str, cmd: list[str], stdout: str, stderr: str, ok: bool) -> None:
         """
@@ -304,70 +181,5 @@ class Bridge:
                     f.write("\n[STDERR]\n" + stderr.strip() + "\n")
         except Exception as e:
             raise RuntimeError(f"Failed to write to log file '{log_file}': {e}")
-
-    # ---------- Remote placeholders (not implemented yet) ----------
-
-    def _remote_compile(self, sketch_dir_or_ino: str, log_file: Optional[str]) -> bool:
-        """
-        Placeholder for remote compile (not implemented).
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError("Remote compile not implemented yet.")
-
-    def _remote_upload(self, sketch_dir_or_ino: str, log_file: Optional[str]) -> bool:
-        """
-        Placeholder for remote upload (not implemented).
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError("Remote upload not implemented yet.")
-
-    def _remote_serial_open(self) -> None:
-        """
-        Placeholder for remote serial open (not implemented).
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError("Remote serial open not implemented yet.")
-
-    def _remote_serial_close(self) -> None:
-        """
-        Placeholder for remote serial close (not implemented).
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError("Remote serial close not implemented yet.")
-
-    def _remote_serial_listen(self, duration: Optional[float], prefix: Optional[str]) -> None:
-        """
-        Placeholder for remote serial listen (not implemented).
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError("Remote serial listen not implemented yet.")
-
-    def _remote_serial_read(self, lines: int) -> list[str]:
-        """
-        Placeholder for remote serial read (not implemented).
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError("Remote serial read not implemented yet.")
-
-    def _remote_serial_write(self, data: str, append_newline: bool) -> None:
-        """
-        Placeholder for remote serial write (not implemented).
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError("Remote serial write not implemented yet.")
 
 bridge_manager = Bridge(mode=LOCAL_MODE)  # Global instance of the Bridge manager

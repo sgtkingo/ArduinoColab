@@ -3,7 +3,7 @@
 # Dependency: pyserial (pip install pyserial)
 
 from __future__ import annotations
-from typing import Optional, Iterable, Callable
+from typing import Optional, Union, Callable
 import time
 
 try:
@@ -100,6 +100,21 @@ class SerialPort:
             self.encoding = encoding
         if autostrip is not None:
             self.autostrip = autostrip
+            
+    def export(self) -> dict:
+        """
+        Exports the current serial configuration as a dictionary.
+
+        Returns:
+            dict: Dictionary with current serial configuration.
+        """
+        return {
+            "port": self.port,
+            "baudrate": self.baudrate,
+            "timeout": self.timeout,
+            "encoding": self.encoding,
+            "autostrip": self.autostrip
+        }
 
     # ---------- Lifecycle ----------
 
@@ -141,7 +156,7 @@ class SerialPort:
 
     # ---------- I/O ----------
 
-    def readline(self) -> Optional[str]:
+    def read(self, size: int = -1) -> bytes:
         """
         Reads one line (non-blocking according to timeout).
 
@@ -152,20 +167,39 @@ class SerialPort:
             Exception: If reading from serial fails.
         """
         if not self._ser or not self._ser.is_open:
-            return None
+            raise RuntimeError("Serial port is not open. Call open() first.")
+            
+        try:
+            raw = self._ser.readline(size)
+            return raw
+        except Exception as e:
+            raise RuntimeError(f"Failed to read line from serial port: {e}")
+
+    def readline(self) -> str:
+        """
+        Reads one line (non-blocking according to timeout).
+
+        Returns:
+            Optional[str]: The line read, or None if nothing is read.
+
+        Raises:
+            Exception: If reading from serial fails.
+        """
+        if not self._ser or not self._ser.is_open:
+            raise RuntimeError("Serial port is not open. Call open() first.")
+        
         try:
             raw = self._ser.readline()
         except Exception as e:
             raise RuntimeError(f"Failed to read line from serial port: {e}")
-        if not raw:
-            return None
+        
         try:
             txt = raw.decode(self.encoding, errors="replace")
         except Exception:
             txt = raw.decode("latin-1", errors="replace")
         return txt.rstrip("\r\n") if self.autostrip else txt
 
-    def read(self, lines: int = 1) -> list[str]:
+    def readlines(self, lines: int = 1) -> list[str]:
         """
         Reads N lines (non-blocking loop – waits within timeouts).
 
@@ -189,7 +223,7 @@ class SerialPort:
             out.append(line)
         return out
 
-    def write(self, data: str, append_newline: bool = True) -> None:
+    def write(self, data: Union[bytes, str], append_newline: bool = True) -> int:
         """
         Writes data to the port (optionally with trailing newline).
 
@@ -199,12 +233,19 @@ class SerialPort:
 
         Raises:
             RuntimeError: If serial port is not open or writing fails.
+             ValueError: If data is not bytes or str.
         """
         if not self._ser or not self._ser.is_open:
             raise RuntimeError("Serial port is not open. Call open() first.")
         try:
-            payload = (data + ("\n" if append_newline else "")).encode(self.encoding, errors="ignore")
-            self._ser.write(payload)
+            if isinstance(data, bytes):
+                payload = data
+            elif isinstance(data, str):    
+                payload = (data + ("\n" if append_newline else "")).encode(self.encoding, errors="ignore")
+            else:
+                raise ValueError("Data must be bytes or str.")
+            ret = self._ser.write(payload)
+            return ret if ret is not None else 0
         except Exception as e:
             raise RuntimeError(f"Failed to write to serial port: {e}")
 

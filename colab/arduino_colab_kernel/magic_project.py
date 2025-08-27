@@ -33,20 +33,29 @@ def _help() -> str:
 
 def _parse_name_mode(args):
     """
-    Parse [name] [--mode local|remote] from args list.
+    Parse [name] [--mode local|remote] [--remote_url <url>] [--token <token>] from args list.
 
     Args:
         args (list): List of arguments.
 
     Returns:
-        tuple: (name, mode) where name is the project name and mode is the project mode.
+        tuple: (name, mode, remote_url, token) where name is the project name, mode is the project mode,
+               remote_url is the URL for remote mode, and token is the authentication token.
     """
     name = DEFAULT_PROJECT_NAME
     mode = LOCAL_MODE
+    remote_url = None
+    token = None
     i = 0
     while i < len(args):
         if args[i] == "--mode" and i + 1 < len(args):
             mode = args[i + 1].lower()
+            i += 2
+        elif args[i] == "--remote_url" and i + 1 < len(args):
+            remote_url = args[i + 1]
+            i += 2
+        elif args[i] == "--token" and i + 1 < len(args):
+            token = args[i + 1]
             i += 2
         elif not args[i].startswith("--"):
             name = args[i]
@@ -55,7 +64,7 @@ def _parse_name_mode(args):
             i += 1
     if mode not in (LOCAL_MODE, REMOTE_MODE):
         mode = LOCAL_MODE
-    return name, mode
+    return name, mode, remote_url, token
 
 @magics_class
 class ProjectMagics(Magics):
@@ -90,22 +99,22 @@ class ProjectMagics(Magics):
 
         try:
             if cmd.startswith("init"):
-                name, mode = _parse_name_mode(rest)
+                name, mode, remote_url, token = _parse_name_mode(rest)
                 if project_manager.project_exists(name):
                     display(Markdown(f"**A project named `{name}` already exists. Choose another name or use `%project load {name}` to load the existing project.**"))
                     return
                 try:
-                    project_manager.init_project(name, project_mode=mode)
+                    project_manager.init_project(name, project_mode=mode, remote_url=remote_url, token=token)
                     display(Markdown(f"`Project *{name}* successfully initialized in mode: {mode}.`"))
                 except Exception as e:
                     display(Markdown(f"**Error initializing project:** `{e}`"))
             elif cmd.startswith("load"):
-                name, mode = _parse_name_mode(rest)
+                name, mode, remote_url, token = _parse_name_mode(rest)
                 if not project_manager.project_exists(name):
                     display(Markdown(f"**A project named `{name}` does not exist! Choose another name or use `%project init {name}` to create a new project.**"))
                     return
                 try:
-                    project_manager.load_project(name, project_mode=mode)
+                    project_manager.load_project(name, project_mode=mode, remote_url=remote_url, token=token)
                     display(Markdown(f"`Project *{name}* loaded in mode: {mode}.`"))
                 except Exception as e:
                     display(Markdown(f"**Error loading project:** `{e}`"))

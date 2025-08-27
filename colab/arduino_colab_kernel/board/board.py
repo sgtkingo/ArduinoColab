@@ -31,12 +31,10 @@ class Board:
             port (str|None): Serial port device name (optional).
 
         Raises:
-            RuntimeError: If no port can be suggested or set.
+            RuntimeError: If no port cant be suggested or set.
         """
         if not port:
             port = SerialPort.suggest_port()  # Automatically suggests port if not provided
-        if not port:
-            raise RuntimeError("No serial port available or specified for the board.")
         # Composition – serial line is separated into its own class
         self.serial = SerialPort()
         self.configure(port=port, name=name, fqbn=fqbn)
@@ -63,7 +61,23 @@ class Board:
             self.fqbn = kwargs["fqbn"]
 
         serial_data: dict = kwargs.get("serial", DEFAULT_SERIAL_CONFIG)
+        if "port" not in serial_data:
+            serial_data["port"] = self.port
         try:
-            self.serial.configure(port=self.port, **serial_data)
+            self.serial.configure(**serial_data)
         except Exception as e:
             raise RuntimeError(f"Failed to configure serial port: {e}")
+        
+    def export(self) -> dict:
+        """
+        Exports the board and serial configuration as a dictionary.
+
+        Returns:
+            dict: Dictionary containing board and serial configuration.
+        """
+        return {
+            "name": self.name,
+            "fqbn": self.fqbn,
+            "port": self.port,
+            "serial": self.serial.export(),
+        }

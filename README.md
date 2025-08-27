@@ -47,6 +47,7 @@ pip install -e .
 
 ```python
 %board select uno
+# Keep automatic port selection or use manual configuration:
 %board serial --port COM5 --baud 115200
 ```
 
