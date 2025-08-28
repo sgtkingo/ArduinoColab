@@ -34,49 +34,40 @@ class LocalBackend(Backend):
 
     def compile(self, board: Board, sketch_source: str,
                 extra_args: Optional[Iterable[str]] = None) -> Dict[str, Any]:
-        # Kompilace využívá board.fqbn; port není nutný.
-        with tempfile.TemporaryDirectory() as td:
-            sketch_dir = os.path.join(td, "sketch")
-            os.makedirs(sketch_dir, exist_ok=True)
-            ino_path = os.path.join(sketch_dir, "sketch.ino")
-            with open(ino_path, "w", encoding="utf-8") as f:
-                f.write(sketch_source)
-                
-            cmd = [
-                self._cli_path, "upload",
-                ino_path,
-                "-b", board.fqbn,
-            ]
-            if extra_args:
-                cmd.extend(extra_args)
-            proc = self._run_cli(cmd)
-            status = True if proc.returncode == 0 else False
-            return {"status": status, "stdout": proc.stdout, "stderr": proc.stderr}
+
+        cli = self._cli_path
+        sketch_dir = os.path.abspath(sketch_source)
+        cmd = [
+            cli, "compile",
+            sketch_dir,
+            "-b", board.fqbn,
+        ]
+        if extra_args:
+            cmd.extend(extra_args)
+            
+        proc = self._run_cli(cmd)
+        status = True if proc.returncode == 0 else False
+        return {"status": status, "stdout": proc.stdout, "stderr": proc.stderr}
 
     def upload(self, board: Board, sketch_source: str,
                extra_args: Optional[Iterable[str]] = None) -> Dict[str, Any]:
-        # Upload využije board.fqbn a board.port – vše je uvnitř Boardu.
-        with tempfile.TemporaryDirectory() as td:
-            sketch_dir = os.path.join(td, "sketch")
-            os.makedirs(sketch_dir, exist_ok=True)
-            ino_path = os.path.join(sketch_dir, "sketch.ino")
-            with open(ino_path, "w", encoding="utf-8") as f:
-                f.write(sketch_source)
-            
-            if board.port is None:
-                raise RuntimeError("No serial port is set for the board. Use `%board serial` to set it.")
-            cmd = [
-                self._cli_path, "upload",
-                ino_path,
-                "-p", board.port,
-                "-b", board.fqbn,
-            ]
-            if extra_args:
-                cmd.extend(extra_args)
 
-            proc = self._run_cli(cmd)
-            status = True if proc.returncode == 0 else False
-            return {"status": status, "stdout": proc.stdout, "stderr": proc.stderr}
+        if board.port is None:
+            raise RuntimeError("No serial port is set for the board. Use `%board serial` to set it.")
+        cli = self._cli_path
+        sketch_dir = os.path.abspath(sketch_source)
+        cmd = [
+            cli, "upload",
+            sketch_dir,
+            "-p", board.port,
+            "-b", board.fqbn,
+        ]
+        if extra_args:
+            cmd.extend(extra_args)
+
+        proc = self._run_cli(cmd)
+        status = True if proc.returncode == 0 else False
+        return {"status": status, "stdout": proc.stdout, "stderr": proc.stderr}
 
     def open_serial(self, board: Board) -> None:
         # Využij kompozici: board.serial už zná port/baud/timeout z configure()

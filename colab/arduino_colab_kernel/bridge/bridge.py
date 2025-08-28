@@ -73,15 +73,13 @@ class Bridge:
 
     def compile(self, board: Board, sketch_source: str,
                 extra_args: Optional[Iterable[str]] = None, log_file:Optional[Iterable[str]] = None) -> bool:
-        if os.path.isfile(sketch_source):
-            with open(sketch_source, "r", encoding="utf-8") as f:
-                code_source = f.read()
-        else:
-            code_source = sketch_source
+        if not os.path.isdir(sketch_source):
+            raise ValueError(f"Sketch source '{sketch_source}' must be a directory!")
+        
         self._printer(f"💻 **Compiling for {board.name} on port {board.port or 'N/A'}...**")
         self._printer("⏳ This may take a while, please wait...")
         
-        res = self._be.compile(board, code_source, extra_args)
+        res = self._be.compile(board, sketch_source, extra_args)
         ok = res.get("status", False)
         if ok:
             self._printer(res.get("stdout", ""))
@@ -96,19 +94,17 @@ class Bridge:
     def upload(self, board: Board, sketch_source: str,
                extra_args: Optional[Iterable[str]] = None, log_file:Optional[Iterable[str]] = None) -> bool:
         
-        if os.path.isfile(sketch_source):
-            with open(sketch_source, "r", encoding="utf-8") as f:
-                code_source = f.read()
-        else:
-            code_source = sketch_source
+        if not os.path.isdir(sketch_source):
+            raise ValueError(f"Sketch source '{sketch_source}' must be a directory!")
+        
         self._printer(f"📡 **Uploading to {board.name} on port {board.port or 'N/A'}...**")
         self._printer("⏳ This may take a while, please wait...")
         # First compile, then upload if successful
-        if not self.compile(board, code_source, log_file=log_file, extra_args=extra_args):
+        if not self.compile(board, sketch_source, log_file=log_file, extra_args=extra_args):
             self._printer("❌ **Compilation failed, upload aborted.**")
             return False
             
-        res = self._be.upload(board, code_source, extra_args)
+        res = self._be.upload(board, sketch_source, extra_args)
         ok = res.get("status", False)
         if ok:
             self._printer(res.get("stdout", ""))
