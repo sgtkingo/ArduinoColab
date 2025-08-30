@@ -211,7 +211,7 @@ class ArduinoProjectManager:
             "code": code_manager.export_as_json()
         }
     
-    def save(self, get_sketch:bool=False) -> str:
+    def save(self) -> str:
         """
         Saves the current code to a .ino file in the target directory and exports project JSON.
 
@@ -232,7 +232,7 @@ class ArduinoProjectManager:
                 json.dump(project_json, f, indent=4, ensure_ascii=False)
         except Exception as e:
             raise RuntimeError(f"Failed to save project: {e}")
-        return self.ino_generator.get_path() if get_sketch else self.get_project_dir(as_abs=True)       
+        return self.get_project_dir(as_abs=True)       
     
     def _set_project_dir(self, projects_dir: str):
         """

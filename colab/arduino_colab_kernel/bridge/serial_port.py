@@ -15,6 +15,9 @@ except Exception as e:
     ) from e
 
 
+SAFETY_TIMEOUT = 0.1  # seconds
+WATCHDOG_RESET_INTERVAL = 10.0  # seconds
+
 # ---------- Port autodetection ----------
 def list_serial_ports() -> list[str]:
     """
@@ -175,7 +178,7 @@ class SerialPort:
         except Exception as e:
             raise RuntimeError(f"Failed to read line from serial port: {e}")
 
-    def readline(self) -> str:
+    def readline(self, filters=[b"", b"\n", b"\r\n"]) -> str:
         """
         Reads one line (non-blocking according to timeout).
 
@@ -187,9 +190,16 @@ class SerialPort:
         """
         if not self._ser or not self._ser.is_open:
             raise RuntimeError("Serial port is not open. Call open() first.")
+        watchdog = 0
         
         try:
-            raw = self._ser.readline()
+            raw = None
+            while raw is None or raw in filters:
+                raw = self.read()
+                time.sleep(SAFETY_TIMEOUT)  # gentle pause to avoid CPU spinning
+                watchdog += SAFETY_TIMEOUT
+                if watchdog >= WATCHDOG_RESET_INTERVAL:
+                    raise RuntimeError("Watchdog: No data received from serial port for too long.")
         except Exception as e:
             raise RuntimeError(f"Failed to read line from serial port: {e}")
         
@@ -199,7 +209,7 @@ class SerialPort:
             txt = raw.decode("latin-1", errors="replace")
         return txt.rstrip("\r\n") if self.autostrip else txt
 
-    def readlines(self, lines: int = 1) -> list[str]:
+    def readlines(self, lines: int = 1, filters=["", "\n", "\r\n"]) -> list[str]:
         """
         Reads N lines (non-blocking loop – waits within timeouts).
 
@@ -217,8 +227,7 @@ class SerialPort:
         out: list[str] = []
         while len(out) < lines:
             line = self.readline()
-            if line is None:
-                time.sleep(0.01)  # gentle pause to avoid CPU spinning
+            if line is None or line in filters:
                 continue
             out.append(line)
         return out

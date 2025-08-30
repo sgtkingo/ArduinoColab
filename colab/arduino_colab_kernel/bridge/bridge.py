@@ -133,15 +133,15 @@ class Bridge:
         return self._be.write_serial(board, data, append_newline)
     
     def listen_serial(self, board: Board, duration: Optional[int] = None,
-                    prefix: Optional[str] = None) -> None:
+                    prefix: Optional[str] = None, filters=[""]) -> None:
         start = time.time()
         try:
             while True:
                 if duration is not None and (time.time() - start) >= duration:
                     break
-                line = self.readlines_serial(board, size=1)
-                line = line[0] if line else None
-                if line is None:
+                lines = self.readlines_serial(board, size=1)
+                line = lines[0] if lines else None
+                if line is None or line in filters:
                     continue
                 if prefix is not None and not line.startswith(prefix):
                     continue

@@ -232,8 +232,8 @@ class BoardMagic(Magics):
                         rest, log_file = _parse_logfile(rest)
                         
                     b = board_manager.require_board()
-                    sketch_file = project_manager.save(get_sketch=True)
-                    ok = bridge_manager.compile(board=b, sketch_source=sketch_file, log_file=log_file)
+                    sketch_dir = project_manager.save()
+                    ok = bridge_manager.compile(board=b, sketch_source=sketch_dir, log_file=log_file)
                     if ok:
                         msg = "✅ **Compilation successful.**"
                         if log_file:
@@ -250,8 +250,8 @@ class BoardMagic(Magics):
                         rest, log_file = _parse_logfile(rest)
                     
                     b = board_manager.require_board()
-                    sketch_file = project_manager.save(get_sketch=True)
-                    ok = bridge_manager.upload(board=b, sketch_source=sketch_file, log_file=log_file)
+                    sketch_dir = project_manager.save()
+                    ok = bridge_manager.upload(board=b, sketch_source=sketch_dir, log_file=log_file)
                     if ok:
                         msg = "🚀 **Upload complete.**"
                         if log_file:
