@@ -10,6 +10,7 @@ __pycache__/
 
 # Ignore project directories
 projects/
+project_workspace/
 
 # Ignore Python bytecode files
 *.pyc

@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "arduino-colab-kernel"
-version = "0.1.52"
-description = "Jupyter magics for Arduino/ESP32"
+name = "arduino-colab-bridge"
+version = "0.1.0"
+description = "HW bridge for Arduino Colab"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -24,8 +24,8 @@ classifiers = [
 ]
 dependencies = [
     "pyserial>=3.5",
-    "ipykernel",
-    "ipython"
+    "flask>=3.1.2",
+    "arduino-colab-kernel>=0.1.52",
 ]
 
 [project.urls]
@@ -35,7 +35,7 @@ Issues = "https://github.com/sgtkingo/ArduinoColab/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["arduino_colab_kernel", "arduino_colab_kernel.*"]
+include = ["arduino_colab_bridge", "arduino_colab_bridge.*"]
 
 [tool.setuptools]
 include-package-data = true

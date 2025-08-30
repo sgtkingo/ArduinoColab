@@ -92,12 +92,12 @@ class RemoteBackend(Backend):
         if os.path.isdir(sketch_source):
             # Zip the directory and base64 encode
             zipped = self._zip_directory(sketch_source)
-            return {"sketch_zip_b64": base64.b64encode(zipped).decode("ascii")}
+            return {"sketch_zip_b64": base64.b64encode(zipped).decode("ascii"), "sketch_name": os.path.basename(sketch_source)}
         elif os.path.isfile(sketch_source):
             # Read the file and base64 encode
             with open(sketch_source, "rb") as f:
                 content = f.read()
-            return {"sketch_b64": base64.b64encode(content).decode("ascii")}
+            return {"sketch_b64": base64.b64encode(content).decode("ascii"), "sketch_name": os.path.basename(sketch_source)}
         else:
             raise RuntimeError(f"Invalid sketch source: {sketch_source}")
 
