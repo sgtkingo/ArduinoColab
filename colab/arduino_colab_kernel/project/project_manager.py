@@ -11,10 +11,11 @@ from arduino_colab_kernel.bridge.bridge import bridge_manager  # global instance
 from arduino_colab_kernel.bridge.bridge import LOCAL_MODE, REMOTE_MODE
 
 from arduino_colab_kernel.code.ino_generator import InoGenerator
-
-DEFAULT_PROJECT_NAME = "sketch"
-DEFAULT_PROJECTS_DIR = "./projects"
-DEFAULT_LOGS_DIR = "logs"
+from arduino_colab_kernel.project.config import (
+    DEFAULT_PROJECT_NAME,
+    DEFAULT_PROJECTS_DIR,
+    DEFAULT_LOGS_DIR
+)
 
 class ArduinoProjectManager:
     """
@@ -35,6 +36,7 @@ class ArduinoProjectManager:
         self.project_dir = ""
         self.logs_dir = ""
         self.project_mode = ""
+        self.project_remote_url = ""
         self.ino_generator: InoGenerator = InoGenerator(prepare_dirs=False)
         
     def project_exists(self, project_name: str, project_dir: str = DEFAULT_PROJECTS_DIR) -> bool:
@@ -77,6 +79,8 @@ class ArduinoProjectManager:
         try:
             bridge_manager.set_mode(project_mode, remote_url=remote_url, token=token)
             self.project_mode = bridge_manager.mode
+            self.project_remote_url = bridge_manager.remote_url
+            
             self._set_project_dir(projects_dir)
             projects_dir_abs = self.get_project_dir(as_abs=True)
             self.ino_generator = InoGenerator(self.project_name, projects_dir_abs)
@@ -113,6 +117,7 @@ class ArduinoProjectManager:
         try:
             bridge_manager.set_mode(project_mode, remote_url=remote_url, token=token)
             self.project_mode = bridge_manager.mode
+            self.project_remote_url = bridge_manager.remote_url
             
             self._set_project_dir(projects_dir)
             projects_dir_abs = self.get_project_dir(as_abs=True)
@@ -126,14 +131,15 @@ class ArduinoProjectManager:
         except Exception as e:
             raise RuntimeError(f"Failed to load project: {e}")
         
-    def get_project(self) -> tuple:
+    def status(self) -> str:
         """
-        Returns the name and path of the current project.
+        Returns the current project status.
 
         Returns:
-            tuple: (project_name, absolute path to project directory)
+            str: Status message with project name, mode, and directory. If mode == remote, also includes remote URL.
         """
-        return self.project_name, self.get_project_dir(as_abs=True)
+        project_location = self.get_project_dir(as_abs=True) if self.project_dir else "Not set"
+        return f"Project: `{self.project_name}` | Mode: `{self.project_mode}` [SERVER:{self.project_remote_url}] | Location: `{project_location}`"
     
     def delete_project(self):
         """

@@ -12,16 +12,12 @@ from arduino_colab_kernel.backends.local_backend import LocalBackend
 from arduino_colab_kernel.backends.remote_backend import RemoteBackend
 
 from arduino_colab_kernel.board.board import Board
-
-# Local path to arduino-cli (can be in PATH or in the package)
-ARDUINO_CLI_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools", "arduino-cli.exe")
+from arduino_colab_kernel.project.config import (
+    ARDUINO_CLI_PATH,
+    LOCAL_MODE,
+    REMOTE_MODE,
+    DEFAULT_REMOTE_URL
 )
-
-LOCAL_MODE = "local"  # local mode (default)
-REMOTE_MODE = "remote"  # remote mode (e.g. for cloud IDEs)
-
-DEFAULT_REMOTE_URL = "http://localhost:5000"  # default remote server URL (for REMOTE_MODE)
 
 class Bridge:
     """
@@ -51,6 +47,10 @@ class Bridge:
         Raises:
             ValueError: If mode is not valid or required parameters are missing.
         """
+        self.mode = ""
+        self.remote_url = ""
+        self._be: Backend
+        
         try:
             self.set_mode(mode, remote_url=remote_url, token=token)
         except ValueError as e:
@@ -85,10 +85,11 @@ class Bridge:
         else:  # REMOTE_MODE
             if not remote_url:
                 remote_url = DEFAULT_REMOTE_URL
-                print(f"⚠️ Warning: No remote_url provided, using default '{DEFAULT_REMOTE_URL}'")
+                print(f"ℹ️ Information: No remote_url provided, using default '{DEFAULT_REMOTE_URL}'")
             if not token:
                 raise ValueError("API token must be provided for remote mode.")
             self._be: Backend = RemoteBackend(remote_url, token)
+            self.remote_url = remote_url
 
     def compile(
         self,

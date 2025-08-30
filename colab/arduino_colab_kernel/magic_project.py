@@ -6,7 +6,7 @@ from IPython.core.magic import Magics, magics_class, cell_magic, line_magic
 from IPython.display import Markdown, display
 
 from arduino_colab_kernel.project.project_manager import project_manager
-from arduino_colab_kernel.project.project_manager import DEFAULT_PROJECT_NAME, LOCAL_MODE, REMOTE_MODE
+from arduino_colab_kernel.project.config import DEFAULT_PROJECT_NAME, LOCAL_MODE, REMOTE_MODE
 
 def _help() -> str:
     """
@@ -23,7 +23,7 @@ def _help() -> str:
 | **`%project init`**           | `[name] [--mode local/remote]`     | Creates a new project with the given name and mode.                   |
 | **`%project load`**           | `[name] [--mode local/remote] [--remote_url <URL>] [--token <API_TOKEN>]`     | Loads an existing project by name and mode. For mode `remote` please provide token using `--token <YOUR_API_TOKEN_HERE>`. You can also provide remote server url address using `--remote_url <YOUR_REMOTE_SERVER_ADDRESS_HERE>` (*Optional*)|
 | **`%project clear`**          | `[section] [cell]`*(optional)*    | Clears the content of the selected section or a specific cell.        |
-| **`%project get`**            | *(no parameters)*                 | Gets information about the current project.                           |
+| **`%project status`**            | *(no parameters)*                 | Gets information about the current project.                           |
 | **`%project delete`**         | *(no parameters)*                 | Deletes the entire current project.                                   |
 | **`%project show`**           | *(no parameters)*                 | Displays a project overview (sections, cells, code).                  |
 | **`%project export`**         | *(no parameters)*                 | Exports the project to a file and saves it.                           |
@@ -130,11 +130,11 @@ class ProjectMagics(Magics):
                     display(Markdown("`Code memory cleared.`"))
                 except Exception as e:
                     display(Markdown(f"**Error clearing code:** `{e}`"))
-            elif cmd == "get":
+            elif cmd == "status":
                 # Show project info
                 try:
-                    project_name, project_location = project_manager.get_project()
-                    display(Markdown(f"Project: **{project_name}** \t is located at: *{project_location}*"))
+                    status = project_manager.status()
+                    display(Markdown(status))
                 except Exception as e:
                     display(Markdown(f"**Error getting project info:** `{e}`"))
             elif cmd == "delete":

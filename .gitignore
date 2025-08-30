@@ -33,3 +33,6 @@ projects/
 
 # Ignore avr directory (Arduiono libraries)
 avr/
+
+# Ignore any TODO files
+TODO.*

@@ -3,12 +3,7 @@ from arduino_colab_kernel.bridge.serial_port import SerialPort
 # Board class: holds configuration of the target board (name, fqbn) and composition of SerialPort.
 # Board itself does not handle build/upload (that is handled by BoardManager), only delegates serial I/O to SerialPort.
 
-DEFAULT_SERIAL_CONFIG = {
-    "baudrate": 115200,
-    "timeout": 0.1,
-    "encoding": "utf-8",
-    "autostrip": True,
-}
+from arduino_colab_kernel.project.config import DEFAULT_SERIAL_CONFIG
 
 class Board:
     """
