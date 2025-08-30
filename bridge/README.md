@@ -19,18 +19,17 @@ pip install -r .\requirements.txt
 **Run the server:**
 **RUN** server with default settings (localhost):
 ```bash
-python -m arduino_colab_kernel.backends.remote_server
+python -m arduino_colab_server.py
 ```
 *OR* use custom port and token:
 ```bash
-python -m arduino_colab_kernel.backends.remote_server
-
-python -m arduino_colab_kernel.backends.remote_server --port 5000 --token YOUR_TOKEN
+python -m arduino_colab_server.py --port 5000 --token YOUR_TOKEN
 ```
 - Replace `YOUR_TOKEN` with a secure token of your choice.
 - The server will listen for requests from the frontend (Colab/Jupyter).
 
-**Open** server URL address in web-browser and copy *TOKEN*.
+### 1.1 Open server site in web-browser
+**Open** server URL address in web-browser and copy *TOKEN*, and *Server URL* if needed.
 
 ### 2. Connecting from the Client (Colab/Jupyter)
 
@@ -42,13 +41,18 @@ In your Jupyter/Colab notebook, load the magics and set up the remote backend:
 %load_ext arduino_colab_kernel.magic_code
 %load_ext arduino_colab_kernel.magic_serial
 
-MY_API_TOKEN = "YOUR_TOKEN"  # Use the same token as the server
-REMOTE_URL = "http://<server-ip>:5000"  # Replace <server-ip> with your server's IP address
+MY_API_TOKEN = input("Enter your API token: ")  # Use the same token as the server
+REMOTE_URL = "http://<server-ip>:<server-port>"  # Replace <server-ip> and <server-port> with your server's IP address and port (*Optional*)
 
 # Load or initialize a project in remote mode
 %project load --mode remote --remote_url $REMOTE_URL --token $MY_API_TOKEN
-# or
+# init
 %project init --mode remote --remote_url $REMOTE_URL --token $MY_API_TOKEN
+
+# or use simplify version with default server address:
+%project load --mode remote --token {MY_API_TOKEN}
+# init
+%project init --mode remote --token {MY_API_TOKEN}
 ```
 
 ### 3. Workflow
