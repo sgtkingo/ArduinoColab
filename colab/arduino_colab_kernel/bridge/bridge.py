@@ -2,7 +2,7 @@
 # Bridge: performs compile/upload + serial communication ON a specific Board.
 # Modes:
 #  - "local"  – uses arduino-cli and local pyserial (Board.serial)
-#  - "remote" – placeholders for future HTTP/WS client (not implemented)
+#  - "remote" – HTTP/WS client (RemoteBackend)
 from __future__ import annotations
 from typing import Optional, Iterable, Dict, Any, Union, List, Callable
 import os, time
@@ -21,7 +21,7 @@ ARDUINO_CLI_PATH = os.path.abspath(
 LOCAL_MODE = "local"  # local mode (default)
 REMOTE_MODE = "remote"  # remote mode (e.g. for cloud IDEs)
 
-BASE_URL = "http://localhost:5000"  # default remote server URL (for REMOTE_MODE)
+DEFAULT_REMOTE_URL = "http://localhost:5000"  # default remote server URL (for REMOTE_MODE)
 
 class Bridge:
     """
@@ -29,111 +29,276 @@ class Bridge:
 
     Attributes:
         mode (str): Operation mode ("local" or "remote").
+        _be (Backend): Backend instance (LocalBackend or RemoteBackend).
+        _printer (Callable[[str], None]): Printer function for output.
     """
-    def __init__(self, mode: str = LOCAL_MODE, base_url: Optional[str] = BASE_URL, token: Optional[str] = None, explicit_printer: Optional[Callable[[str], None]] = None):
+    def __init__(
+        self,
+        mode: str = LOCAL_MODE,
+        remote_url: Optional[str] = DEFAULT_REMOTE_URL,
+        token: Optional[str] = None,
+        explicit_printer: Optional[Callable[[str], None]] = None
+    ):
         """
         Initializes the Bridge.
 
         Args:
             mode (str): Operation mode ("local" or "remote").
+            remote_url (Optional[str]): Remote server URL for REMOTE_MODE.
+            token (Optional[str]): API token for remote mode.
+            explicit_printer (Optional[Callable[[str], None]]): Custom printer function.
 
         Raises:
-            ValueError: If mode is not valid.
+            ValueError: If mode is not valid or required parameters are missing.
         """
         try:
-            self.set_mode(mode, base_url=base_url, token=token)
+            self.set_mode(mode, remote_url=remote_url, token=token)
         except ValueError as e:
             raise ValueError(f"Failed to initialize Bridge: {e}")
-        
-        self._printer:Callable[[str]] = explicit_printer if explicit_printer else print
-            
-        
+        self._printer: Callable[[str], None] = explicit_printer if explicit_printer else print
+
     # ---------- Wiring / configuration ----------
-    def set_mode(self, mode: str, base_url: Optional[str] = BASE_URL, token: Optional[str] = None) -> None:
+    def set_mode(
+        self,
+        mode: str,
+        remote_url: Optional[str] = DEFAULT_REMOTE_URL,
+        token: Optional[str] = None
+    ) -> None:
         """
-        Sets the work mode (local/remote).
+        Sets the work mode (local/remote) and initializes the backend.
 
         Args:
             mode (str): "local" or "remote".
+            remote_url (Optional[str]): Remote server URL for REMOTE_MODE.
+            token (Optional[str]): API token for remote mode.
 
         Raises:
-            ValueError: If mode is not valid.
+            ValueError: If mode is not valid or required parameters are missing.
         """
         mode = mode.lower().strip()
         if mode not in (LOCAL_MODE, REMOTE_MODE):
             raise ValueError(f"Invalid mode '{mode}'. Use '{LOCAL_MODE}' or '{REMOTE_MODE}'.")
         self.mode = mode
-        
+
         if self.mode == LOCAL_MODE:
             self._be: Backend = LocalBackend(arduino_cli=ARDUINO_CLI_PATH)
         else:  # REMOTE_MODE
-            if not base_url or not token:
-                raise ValueError("base_url and token must be provided for remote mode.")
-            self._be: Backend = RemoteBackend(base_url=base_url, token=token)
+            if not remote_url:
+                remote_url = DEFAULT_REMOTE_URL
+                print(f"⚠️ Warning: No remote_url provided, using default '{DEFAULT_REMOTE_URL}'")
+            if not token:
+                raise ValueError("API token must be provided for remote mode.")
+            self._be: Backend = RemoteBackend(remote_url, token)
 
-    def compile(self, board: Board, sketch_source: str,
-                extra_args: Optional[Iterable[str]] = None, log_file:Optional[Iterable[str]] = None) -> bool:
+    def compile(
+        self,
+        board: Board,
+        sketch_source: str,
+        extra_args: Optional[Iterable[str]] = None,
+        log_file: Optional[str] = None
+    ) -> bool:
+        """
+        Compiles the sketch for the given board.
+
+        Args:
+            board (Board): The board to compile for.
+            sketch_source (str): Path to the sketch directory (must be a directory).
+            extra_args (Optional[Iterable[str]]): Additional CLI arguments.
+            log_file (Optional[str]): Path to log file.
+
+        Returns:
+            bool: True if compilation is successful, False otherwise.
+
+        Raises:
+            ValueError: If sketch_source is not a directory.
+            Exception: If backend compile fails.
+        """
         if not os.path.isdir(sketch_source):
             raise ValueError(f"Sketch source '{sketch_source}' must be a directory!")
-        
         self._printer(f"💻 **Compiling for {board.name} on port {board.port or 'N/A'}...**")
         self._printer("⏳ This may take a while, please wait...")
-        
-        res = self._be.compile(board, sketch_source, extra_args)
-        ok = res.get("status", False)
-        if ok:
-            self._printer(res.get("stdout", ""))
-            self._printer("✅ **Compile complete.**")
-        else:
-            self._printer(res.get("stderr", ""))
-            self._printer("❌ **Compile failed.**")
-        if log_file and isinstance(log_file, str):
-            self._append_log(log_file, res.get("cmd", []), res.get("stdout", ""), res.get("stderr", ""), res.get("ok", False))
-        return ok
 
-    def upload(self, board: Board, sketch_source: str,
-               extra_args: Optional[Iterable[str]] = None, log_file:Optional[Iterable[str]] = None) -> bool:
-        
+        try:
+            res = self._be.compile(board, sketch_source, extra_args)
+            ok = res.get("status", False)
+            if ok:
+                self._printer(res.get("stdout", ""))
+                self._printer("✅ **Compile complete.**")
+            else:
+                self._printer(res.get("stderr", ""))
+                self._printer("❌ **Compile failed.**")
+            if log_file and isinstance(log_file, str):
+                self._append_log(
+                    log_file,
+                    res.get("cmd", []),
+                    res.get("stdout", ""),
+                    res.get("stderr", ""),
+                    res.get("ok", False)
+                )
+            return ok
+        except Exception as e:
+            raise e
+
+    def upload(
+        self,
+        board: Board,
+        sketch_source: str,
+        extra_args: Optional[Iterable[str]] = None,
+        log_file: Optional[str] = None
+    ) -> bool:
+        """
+        Uploads the sketch to the given board.
+
+        Args:
+            board (Board): The board to upload to.
+            sketch_source (str): Path to the sketch directory (must be a directory).
+            extra_args (Optional[Iterable[str]]): Additional CLI arguments.
+            log_file (Optional[str]): Path to log file.
+
+        Returns:
+            bool: True if upload is successful, False otherwise.
+
+        Raises:
+            ValueError: If sketch_source is not a directory.
+            Exception: If backend upload fails.
+        """
         if not os.path.isdir(sketch_source):
             raise ValueError(f"Sketch source '{sketch_source}' must be a directory!")
-        
         self._printer(f"📡 **Uploading to {board.name} on port {board.port or 'N/A'}...**")
         self._printer("⏳ This may take a while, please wait...")
-        # First compile, then upload if successful
-        if not self.compile(board, sketch_source, log_file=log_file, extra_args=extra_args):
-            self._printer("❌ **Compilation failed, upload aborted.**")
-            return False
-            
-        res = self._be.upload(board, sketch_source, extra_args)
-        ok = res.get("status", False)
-        if ok:
-            self._printer(res.get("stdout", ""))
-            self._printer("✅ **Upload complete.**")
-        else:
-            self._printer(res.get("stderr", ""))
-            self._printer("❌ **Upload failed.**")
-        if log_file and isinstance(log_file, str):
-            self._append_log(log_file, res.get("cmd", []), res.get("stdout", ""), res.get("stderr", ""), res.get("ok", False))
-        
-        return ok
+        try:
+            # First compile, then upload if successful
+            if not self.compile(board, sketch_source, log_file=log_file, extra_args=extra_args):
+                self._printer("❌ **Compilation failed, upload aborted.**")
+                return False
+
+            res = self._be.upload(board, sketch_source, extra_args)
+            ok = res.get("status", False)
+            if ok:
+                self._printer(res.get("stdout", ""))
+                self._printer("✅ **Upload complete.**")
+            else:
+                self._printer(res.get("stderr", ""))
+                self._printer("❌ **Upload failed.**")
+            if log_file and isinstance(log_file, str):
+                self._append_log(
+                    log_file,
+                    res.get("cmd", []),
+                    res.get("stdout", ""),
+                    res.get("stderr", ""),
+                    res.get("ok", False)
+                )
+            return ok
+        except Exception as e:
+            raise e
 
     def open_serial(self, board: Board) -> None:
-        self._be.open_serial(board)
+        """
+        Opens the serial port for the given board.
+
+        Args:
+            board (Board): The board whose serial port to open.
+
+        Raises:
+            Exception: If opening the serial port fails.
+        """
+        try:
+            self._be.open_serial(board)
+        except Exception as e:
+            raise RuntimeError(f"Failed to open serial port: {e}")
 
     def close_serial(self, board: Board) -> None:
-        self._be.close_serial(board)
-        
+        """
+        Closes the serial port for the given board.
+
+        Args:
+            board (Board): The board whose serial port to close.
+
+        Raises:
+            Exception: If closing the serial port fails.
+        """
+        try:
+            self._be.close_serial(board)
+        except Exception as e:
+            raise RuntimeError(f"Failed to close serial port: {e}")
+
     def read_serial(self, board: Board, size: int = 1024) -> bytes:
-        return self._be.read_serial(board, size)
+        """
+        Reads bytes from the serial port.
+
+        Args:
+            board (Board): The board whose serial port to read from.
+            size (int): Number of bytes to read.
+
+        Returns:
+            bytes: Bytes read from the serial port.
+
+        Raises:
+            Exception: If reading from serial fails.
+        """
+        try:
+            return self._be.read_serial(board, size)
+        except Exception as e:
+            raise RuntimeError(f"Failed to read from serial port: {e}")
 
     def readlines_serial(self, board: Board, size: int = 1) -> List[str]:
-        return self._be.readlines_serial(board, size)
+        """
+        Reads lines from the serial port.
+
+        Args:
+            board (Board): The board whose serial port to read from.
+            size (int): Number of lines to read.
+
+        Returns:
+            List[str]: List of lines read from the serial port.
+
+        Raises:
+            Exception: If reading lines from serial fails.
+        """
+        try:
+            return self._be.readlines_serial(board, size)
+        except Exception as e:
+            raise RuntimeError(f"Failed to read lines from serial port: {e}")
 
     def write_serial(self, board: Board, data: Union[bytes, str], append_newline: bool = True) -> int:
-        return self._be.write_serial(board, data, append_newline)
-    
-    def listen_serial(self, board: Board, duration: Optional[int] = None,
-                    prefix: Optional[str] = None, filters=[""]) -> None:
+        """
+        Writes data to the serial port.
+
+        Args:
+            board (Board): The board whose serial port to write to.
+            data (Union[bytes, str]): Data to write.
+            append_newline (bool): Whether to append a newline.
+
+        Returns:
+            int: Number of bytes written.
+
+        Raises:
+            Exception: If writing to serial fails.
+        """
+        try:
+            return self._be.write_serial(board, data, append_newline)
+        except Exception as e:
+            raise RuntimeError(f"Failed to write to serial port: {e}")
+
+    def listen_serial(
+        self,
+        board: Board,
+        duration: Optional[int] = None,
+        prefix: Optional[str] = None,
+        filters: List[str] = [""]
+    ) -> None:
+        """
+        Listens to the serial port and prints lines, optionally filtering by prefix and duration.
+
+        Args:
+            board (Board): The board whose serial port to listen to.
+            duration (Optional[int]): Duration in seconds to listen (None for unlimited).
+            prefix (Optional[str]): Only print lines starting with this prefix.
+            filters (List[str]): List of lines to ignore.
+
+        Raises:
+            Exception: If listening fails.
+        """
         start = time.time()
         try:
             while True:
@@ -150,9 +315,15 @@ class Bridge:
             pass
         except Exception as e:
             raise RuntimeError(f"Error during serial listen: {e}")
-    
+
     @staticmethod
-    def _append_log(log_file: str, cmd: list[str], stdout: str, stderr: str, ok: bool) -> None:
+    def _append_log(
+        log_file: str,
+        cmd: list[str],
+        stdout: str,
+        stderr: str,
+        ok: bool
+    ) -> None:
         """
         Appends a run record to the log file.
 

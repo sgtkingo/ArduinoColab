@@ -20,8 +20,8 @@ def _help() -> str:
 
 | Command                        | Parameters                        | Description                                                           |
 |-------------------------------|-----------------------------------|-----------------------------------------------------------------------|
-| **`%project init`**           | `[name] [--mode local|remote]`     | Creates a new project with the given name and mode.                   |
-| **`%project load`**           | `[name] [--mode local|remote]`     | Loads an existing project by name and mode.                           |
+| **`%project init`**           | `[name] [--mode local/remote]`     | Creates a new project with the given name and mode.                   |
+| **`%project load`**           | `[name] [--mode local/remote] [--remote_url <URL>] [--token <API_TOKEN>]`     | Loads an existing project by name and mode. For mode `remote` please provide token using `--token <YOUR_API_TOKEN_HERE>`. You can also provide remote server url address using `--remote_url <YOUR_REMOTE_SERVER_ADDRESS_HERE>` (*Optional*)|
 | **`%project clear`**          | `[section] [cell]`*(optional)*    | Clears the content of the selected section or a specific cell.        |
 | **`%project get`**            | *(no parameters)*                 | Gets information about the current project.                           |
 | **`%project delete`**         | *(no parameters)*                 | Deletes the entire current project.                                   |
@@ -74,6 +74,7 @@ class ProjectMagics(Magics):
     Methods:
         project(line): Handles the %project magic command.
     """
+
     @line_magic
     def project(self, line):
         """
@@ -99,6 +100,7 @@ class ProjectMagics(Magics):
 
         try:
             if cmd.startswith("init"):
+                # Create a new project
                 name, mode, remote_url, token = _parse_name_mode(rest)
                 if project_manager.project_exists(name):
                     display(Markdown(f"**A project named `{name}` already exists. Choose another name or use `%project load {name}` to load the existing project.**"))
@@ -109,6 +111,7 @@ class ProjectMagics(Magics):
                 except Exception as e:
                     display(Markdown(f"**Error initializing project:** `{e}`"))
             elif cmd.startswith("load"):
+                # Load an existing project
                 name, mode, remote_url, token = _parse_name_mode(rest)
                 if not project_manager.project_exists(name):
                     display(Markdown(f"**A project named `{name}` does not exist! Choose another name or use `%project init {name}` to create a new project.**"))
@@ -119,6 +122,7 @@ class ProjectMagics(Magics):
                 except Exception as e:
                     display(Markdown(f"**Error loading project:** `{e}`"))
             elif cmd.startswith("clear"):
+                # Clear code memory or section/cell
                 section_name = rest[0] if len(rest) > 0 else None
                 cell_id = rest[1] if len(rest) > 1 else None
                 try:
@@ -127,12 +131,14 @@ class ProjectMagics(Magics):
                 except Exception as e:
                     display(Markdown(f"**Error clearing code:** `{e}`"))
             elif cmd == "get":
+                # Show project info
                 try:
                     project_name, project_location = project_manager.get_project()
                     display(Markdown(f"Project: **{project_name}** \t is located at: *{project_location}*"))
                 except Exception as e:
                     display(Markdown(f"**Error getting project info:** `{e}`"))
             elif cmd == "delete":
+                # Delete the project after user confirmation
                 try:
                     user_affirmation = input("Do you really want to delete the entire project? (y/n): ").strip().lower()
                     if user_affirmation == 'y':
@@ -143,6 +149,7 @@ class ProjectMagics(Magics):
                 except Exception as e:
                     display(Markdown(f"**Error deleting project:** `{e}`"))
             elif cmd == "show":
+                # Show project code
                 try:
                     project_name = project_manager.project_name if project_manager.project_name else "No project set"
                     code = project_manager.show()
@@ -150,6 +157,7 @@ class ProjectMagics(Magics):
                 except Exception as e:
                     display(Markdown(f"**Error showing project code:** `{e}`"))
             elif cmd == "export":
+                # Export and save project
                 try:
                     file = project_manager.save()
                     display(Markdown("```\n Project exported and saved as:" + file + "\n```"))

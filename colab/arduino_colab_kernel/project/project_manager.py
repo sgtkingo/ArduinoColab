@@ -35,7 +35,7 @@ class ArduinoProjectManager:
         self.project_dir = ""
         self.logs_dir = ""
         self.project_mode = ""
-        self.ino_generator:InoGenerator = InoGenerator(prepare_dirs=False)
+        self.ino_generator: InoGenerator = InoGenerator(prepare_dirs=False)
         
     def project_exists(self, project_name: str, project_dir: str = DEFAULT_PROJECTS_DIR) -> bool:
         """
@@ -51,7 +51,14 @@ class ArduinoProjectManager:
         project_dir = os.path.join(project_dir, project_name)
         return os.path.exists(project_dir) and os.path.isdir(project_dir)
     
-    def init_project(self, project_name: str = DEFAULT_PROJECT_NAME, projects_dir: str = DEFAULT_PROJECTS_DIR, project_mode: str = LOCAL_MODE, remote_url: Optional[str] = None, token: Optional[str] = None):
+    def init_project(
+        self,
+        project_name: str = DEFAULT_PROJECT_NAME,
+        projects_dir: str = DEFAULT_PROJECTS_DIR,
+        project_mode: str = LOCAL_MODE,
+        remote_url: Optional[str] = None,
+        token: Optional[str] = None
+    ):
         """
         Initializes a new project with the given name, directory, and mode.
 
@@ -59,31 +66,43 @@ class ArduinoProjectManager:
             project_name (str): Name of the project.
             projects_dir (str): Path to the directory where projects are stored.
             project_mode (str): Mode for the project ("local" or "remote").
+            remote_url (Optional[str]): Remote server URL for remote mode.
+            token (Optional[str]): API token for remote mode.
 
         Raises:
             ValueError: If the project mode is invalid.
             Exception: If directory or file operations fail.
         """
         self.project_name = project_name.strip()
-        # Set bridge mode
-        bridge_manager.set_mode(project_mode, base_url=remote_url, token=token)
-        self.project_mode = bridge_manager.mode
-        
-        self._set_project_dir(projects_dir)
-        projects_dir_abs = self.get_project_dir(as_abs=True)
-        self.ino_generator = InoGenerator(self.project_name, projects_dir_abs)
-        board_manager.default() # Select default board
-        code_manager.default()  # Re-initialize code manager
-        self.save()  # Save project
+        try:
+            bridge_manager.set_mode(project_mode, remote_url=remote_url, token=token)
+            self.project_mode = bridge_manager.mode
+            self._set_project_dir(projects_dir)
+            projects_dir_abs = self.get_project_dir(as_abs=True)
+            self.ino_generator = InoGenerator(self.project_name, projects_dir_abs)
+            board_manager.default()  # Select default board
+            code_manager.default()   # Re-initialize code manager
+            self.save()  # Save project
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize project: {e}")
     
-    def load_project(self, project_name: str = DEFAULT_PROJECT_NAME, projects_dir: str = DEFAULT_PROJECTS_DIR, project_mode: str = LOCAL_MODE, remote_url: Optional[str] = None, token: Optional[str] = None):
+    def load_project(
+        self,
+        project_name: str = DEFAULT_PROJECT_NAME,
+        projects_dir: str = DEFAULT_PROJECTS_DIR,
+        project_mode: str = LOCAL_MODE,
+        remote_url: Optional[str] = None,
+        token: Optional[str] = None
+    ):
         """
         Loads an existing project, which will be used for file saving.
 
-        Args:7
+        Args:
             project_name (str): Name of the project (used for folder and file).
             projects_dir (str): Path to the directory where projects are stored.
             project_mode (str): Mode for the project ("local" or "remote").
+            remote_url (Optional[str]): Remote server URL for remote mode.
+            token (Optional[str]): API token for remote mode.
 
         Raises:
             ValueError: If the project mode is invalid.
@@ -91,24 +110,21 @@ class ArduinoProjectManager:
             Exception: If file operations fail.
         """
         self.project_name = project_name.strip()
-
-        # Set bridge mode
-        # Set bridge mode
-        bridge_manager.set_mode(project_mode, base_url=remote_url, token=token)
-        self.project_mode = bridge_manager.mode
-        
-        self._set_project_dir(projects_dir)
-        projects_dir_abs = self.get_project_dir(as_abs=True)
-        self.ino_generator = InoGenerator(self.project_name, projects_dir_abs)
-        json_file = os.path.join(projects_dir_abs, f"{self.project_name}.json")
-        if not os.path.exists(json_file):
-            raise FileNotFoundError(f"Project {self.project_name} does not contain any JSON project file.")
         try:
+            bridge_manager.set_mode(project_mode, remote_url=remote_url, token=token)
+            self.project_mode = bridge_manager.mode
+            
+            self._set_project_dir(projects_dir)
+            projects_dir_abs = self.get_project_dir(as_abs=True)
+            self.ino_generator = InoGenerator(self.project_name, projects_dir_abs)
+            json_file = os.path.join(projects_dir_abs, f"{self.project_name}.json")
+            if not os.path.exists(json_file):
+                raise FileNotFoundError(f"Project {self.project_name} does not contain any JSON project file.")
             with open(json_file, "r", encoding="utf-8") as f:
                 json_data = json.load(f)
                 self._configure(**json_data)
         except Exception as e:
-            raise RuntimeError(f"Failed to load project JSON file: {e}")
+            raise RuntimeError(f"Failed to load project: {e}")
         
     def get_project(self) -> tuple:
         """
@@ -150,26 +166,24 @@ class ArduinoProjectManager:
         Raises:
             Exception: If configuration fails.
         """
-        if "project_name" in kwargs:
-            self.project_name = kwargs["project_name"]
-        if "board" in kwargs:
-            board_data:dict = kwargs["board"]
-            try:
+        try:
+            if "project_name" in kwargs:
+                self.project_name = kwargs["project_name"]
+            if "board" in kwargs:
+                board_data: dict = kwargs["board"]
                 board_manager.configure(**board_data)
-            except Exception as e:
-                raise RuntimeError(f"Failed to configure board: {e}")
-        else:
-            board_manager.default()
-        if "code" in kwargs:
-            code_data:dict = kwargs["code"]
-            try:
+            else:
+                board_manager.default()
+                
+            if "code" in kwargs:
+                code_data: dict = kwargs["code"]
                 code_manager.import_from_json(code_data)
-            except Exception as e:
-                raise RuntimeError(f"Failed to import code from JSON: {e}")
-        else:
-            code_manager.default()
+            else:
+                code_manager.default()
+        except Exception as e:
+            raise RuntimeError(f"Failed to configure project: {e}")
             
-    def clear(self, section:str|None = None, cell_id:str|None = None):
+    def clear(self, section: str | None = None, cell_id: str | None = None):
         """
         Clears the current project and code in memory.
 
@@ -254,7 +268,7 @@ class ArduinoProjectManager:
         except Exception as e:
             raise RuntimeError(f"Failed to create project or logs directory: {e}")
     
-    def get_project_dir(self, as_abs = False) -> str:
+    def get_project_dir(self, as_abs: bool = False) -> str:
         """
         Returns the path to the folder with sketches.
 
@@ -266,7 +280,7 @@ class ArduinoProjectManager:
         """
         return os.path.abspath(self.project_dir) if as_abs else os.path.relpath(self.project_dir)
     
-    def get_logs_dir(self, as_abs = False) -> str:
+    def get_logs_dir(self, as_abs: bool = False) -> str:
         """
         Returns the path to the folder with logs.
 
