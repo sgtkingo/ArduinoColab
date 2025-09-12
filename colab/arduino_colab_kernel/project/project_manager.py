@@ -203,7 +203,8 @@ class ArduinoProjectManager:
         try:
             if section:
                 code_manager.remove_code(section, cell_id)
-            code_manager.clear()
+            else:
+                code_manager.clear()
         except Exception as e:
             raise RuntimeError(f"Failed to clear project code: {e}")
         
