@@ -25,7 +25,7 @@ classifiers = [
 dependencies = [
     "pyserial>=3.5",
     "flask>=3.1.2",
-    "arduino-colab-kernel>=0.1.52",
+    "arduino-colab-kernel>=0.1.54",
 ]
 
 [project.urls]
